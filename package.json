@@ -1,0 +1,29 @@
+{
+  "name": "lutchi-zap-hack",
+  "version": "1.0.0",
+  "description": "🤖 Lutchi Zap Hack — Bot de gerenciamento de grupos WhatsApp by Luís Lutchi",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "pino": "^9.5.0",
+    "qrcode-terminal": "^0.12.0",
+    "node-cache": "^5.1.2",
+    "axios": "^1.7.9",
+    "sharp": "^0.33.5",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "Luís Lutchi (@luislutchii)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/luislutchii/lutchi-zap-hack"
+  }
+}
