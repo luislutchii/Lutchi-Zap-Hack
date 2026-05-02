@@ -15,7 +15,7 @@
 ### 📱 Termux (Recomendado)
 
 ```bash
-curl -o install.sh https://raw.githubusercontent.com/luislutchii/lutchi-zap-hack/main/termux-install.sh && bash install.sh
+curl -o install.sh https://raw.githubusercontent.com/luislutchii/Lutchi-Zap-Hack/main/termux-install.sh && bash install.sh
 ```
 
 ### 💻 Manual (Qualquer sistema)
@@ -23,7 +23,7 @@ curl -o install.sh https://raw.githubusercontent.com/luislutchii/lutchi-zap-hack
 ```bash
 pkg install nodejs git -y || sudo apt install nodejs git -y
 
-git clone https://github.com/luislutchii/lutchi-zap-hack.git
+git clone https://github.com/luislutchii/Lutchi-Zap-Hack.git
 cd lutchi-zap-hack
 
 npm install
