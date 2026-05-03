@@ -8,12 +8,11 @@ const downloadCommands = require("../commands/downloads");
 const stickerCommands = require("../commands/stickers");
 const pesquisaCommands = require("../commands/pesquisas");
 const brincadeiraCommands = require("../commands/brincadeiras");
-
 const floodTracker = {};
 
 function normalizeId(jid) {
   if (!jid) return "";
-  return jid.replace(/:.*@/, "@").replace(/@.*/, "").trim();
+  return jid.replace(/:.@/, "@").replace(/@./, "").trim();
 }
 
 async function messageHandler(sock, msg, store) {
@@ -33,6 +32,7 @@ async function messageHandler(sock, msg, store) {
       messageContent?.imageMessage?.caption ||
       messageContent?.videoMessage?.caption || "";
 
+    // Verificar se é comando ou mensagem normal para moderação passiva
     if (!body.startsWith(config.prefix)) {
       if (isGroup) await passiveModeration(sock, msg, from, sender, body);
       return;
@@ -91,6 +91,7 @@ async function messageHandler(sock, msg, store) {
     };
 
     await routeCommand(command, ctx);
+
   } catch (err) {
     console.error("❌ Erro no handler:", err);
   }
@@ -201,22 +202,66 @@ async function routeCommand(command, ctx) {
 
   const handler = routes[command];
   if (handler) return handler();
-  await ctx.reply("❌ Comando *" + command + "* não encontrado!\n\nDigite *" + config.menuPrefix + "* para ver o menu.");
+  await ctx.reply("❌ Comando " + command + " não encontrado!\n\nDigite " + config.menuPrefix + " para ver o menu.");
 }
 
 async function passiveModeration(sock, msg, from, sender, body) {
+  // Primeiro: Verificar mute
   if (isMuted(from, sender)) {
     await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
     return;
   }
+
+  // Verificar se o bot é admin no grupo
+  let isBotAdmin = false;
+  try {
+    const groupMeta = await sock.groupMetadata(from).catch(() => null);
+    if (groupMeta) {
+      const botPhone = normalizeId(sock.user?.id || "");
+      const botLid = normalizeId(sock.user?.lid || "");
+      isBotAdmin = groupMeta.participants
+        .filter((p) => p.admin)
+        .some((p) => {
+          const pNum = normalizeId(p.id);
+          return pNum === botPhone || pNum === botLid ||
+            (p.lid && normalizeId(p.lid) === botPhone) ||
+            (p.lid && normalizeId(p.lid) === botLid);
+        });
+    }
+  } catch (err) {
+    console.error("Erro ao verificar admin do bot:", err);
+  }
+
+  // Verificar AntiLink
   if (getAntiLink(from) && /(https?:\/\/|www\.|chat\.whatsapp\.com)/gi.test(body)) {
     await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-    await sock.sendMessage(from, {
-      text: "⚠️ @" + sender.split("@")[0] + " links não são permitidos!",
-      mentions: [sender],
-    });
+    
+    // Se o bot for admin, expulsar o membro
+    if (isBotAdmin) {
+      try {
+        await sock.groupParticipantsUpdate(from, [sender], "remove");
+        await sock.sendMessage(from, {
+          text: `🔨 @${sender.split("@")[0]} foi *EXPULSO* por enviar link!\n\nRegra: ${getAntiLink(from) === true ? "Links não são permitidos neste grupo!" : getAntiLink(from)}`,
+          mentions: [sender]
+        });
+      } catch (err) {
+        console.error("Erro ao expulsar membro:", err);
+        await sock.sendMessage(from, {
+          text: `⚠️ @${sender.split("@")[0]} links não são permitidos! (não foi possível expulsar)`,
+          mentions: [sender],
+        });
+      }
+    } else {
+      // Se o bot não for admin, só avisar
+      await sock.sendMessage(from, {
+        text: `⚠️ @${sender.split("@")[0]} links não são permitidos!\n\nℹ️ Adicione o bot como admin para que ele possa expulsar automaticamente.`,
+        mentions: [sender],
+      });
+    }
     return;
   }
+
+  // Verificar AntiFlood
   if (getAntiFlood(from)) {
     const key = from + ":" + sender;
     const now = Date.now();
@@ -231,6 +276,8 @@ async function passiveModeration(sock, msg, from, sender, body) {
       floodTracker[key] = [];
     }
   }
+
+  // Verificar Banwords
   const banwords = getBanwords(from);
   if (banwords.length > 0 && banwords.some((w) => body.toLowerCase().includes(w))) {
     await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
