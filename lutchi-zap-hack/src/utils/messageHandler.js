@@ -1,43 +1,40 @@
-// ╔══════════════════════════════════════════════════╗
-// ║       LUTCHI ZAP HACK - Message Handler          ║
-// ╚══════════════════════════════════════════════════╝
-
 const config = require("../config/config");
 const { getAntiLink, getAntiFlood, getBanwords, isMuted } = require("./database");
 
-// Importar comandos
 const infoCommands = require("../commands/info");
 const adminCommands = require("../commands/admin");
 const modCommands = require("../commands/mod");
-const funCommands = require("../commands/fun");
+const downloadCommands = require("../commands/downloads");
+const stickerCommands = require("../commands/stickers");
+const pesquisaCommands = require("../commands/pesquisas");
+const brincadeiraCommands = require("../commands/brincadeiras");
 
-// Anti-flood tracker
 const floodTracker = {};
+
+function normalizeId(jid) {
+  if (!jid) return "";
+  return jid.replace(/:.*@/, "@").replace(/@.*/, "").trim();
+}
 
 async function messageHandler(sock, msg, store) {
   try {
     const messageContent = msg.message;
-    const type = Object.keys(messageContent)[0];
+    if (!messageContent) return;
+
     const isGroup = msg.key.remoteJid.endsWith("@g.us");
     const from = msg.key.remoteJid;
     const sender = isGroup
       ? msg.key.participant || msg.key.remoteJid
       : msg.key.remoteJid;
 
-    // Texto da mensagem
     let body =
       messageContent?.conversation ||
       messageContent?.extendedTextMessage?.text ||
       messageContent?.imageMessage?.caption ||
-      messageContent?.videoMessage?.caption ||
-      "";
+      messageContent?.videoMessage?.caption || "";
 
-    // Verifica prefixo
     if (!body.startsWith(config.prefix)) {
-      // Moderação passiva
-      if (isGroup) {
-        await passiveModeration(sock, msg, from, sender, body);
-      }
+      if (isGroup) await passiveModeration(sock, msg, from, sender, body);
       return;
     }
 
@@ -45,7 +42,6 @@ async function messageHandler(sock, msg, store) {
     const command = args[0].toLowerCase();
     args.shift();
 
-    // Metadados do grupo
     let groupMeta = null;
     let isAdmin = false;
     let isBotAdmin = false;
@@ -53,39 +49,47 @@ async function messageHandler(sock, msg, store) {
     if (isGroup) {
       groupMeta = await sock.groupMetadata(from).catch(() => null);
       if (groupMeta) {
-        const senderNum = sender.split("@")[0];
-        const botNum = sock.user?.id?.split(":")[0] || sock.user?.id?.split("@")[0];
+        const senderPhone = normalizeId(sender);
+        const senderLid = normalizeId(msg.key?.participant || "");
+        const botPhone = normalizeId(sock.user?.id || "");
+        const botLid = normalizeId(sock.user?.lid || "");
+
         isAdmin = groupMeta.participants
           .filter((p) => p.admin)
-          .some((p) => p.id.includes(senderNum));
+          .some((p) => {
+            const pNum = normalizeId(p.id);
+            return pNum === senderPhone || pNum === senderLid ||
+              (p.lid && normalizeId(p.lid) === senderPhone) ||
+              (p.lid && normalizeId(p.lid) === senderLid);
+          });
+
         isBotAdmin = groupMeta.participants
           .filter((p) => p.admin)
-          .some((p) => p.id.includes(botNum));
+          .some((p) => {
+            const pNum = normalizeId(p.id);
+            return pNum === botPhone || pNum === botLid ||
+              (p.lid && normalizeId(p.lid) === botPhone) ||
+              (p.lid && normalizeId(p.lid) === botLid);
+          });
       }
     }
 
-    const isOwner = sender.includes(config.owner.number);
+    const isOwner =
+      normalizeId(sender) === normalizeId(config.owner.number + "@s.whatsapp.net") ||
+      sender.includes(config.owner.number);
+
+    if (!isAdmin && !isOwner) {
+      return sock.sendMessage(from, {
+        text: "❌ Apenas *administradores* ou o *dono do bot* podem usar comandos!",
+      }, { quoted: msg });
+    }
 
     const ctx = {
-      sock,
-      msg,
-      from,
-      sender,
-      args,
-      body,
-      isGroup,
-      isAdmin,
-      isBotAdmin,
-      isOwner,
-      groupMeta,
-      store,
-      config,
-      reply: async (text) => {
-        return sock.sendMessage(from, { text }, { quoted: msg });
-      },
+      sock, msg, from, sender, args, body,
+      isGroup, isAdmin, isBotAdmin, isOwner, groupMeta, store, config,
+      reply: async (text) => sock.sendMessage(from, { text }, { quoted: msg }),
     };
 
-    // Roteamento de comandos
     await routeCommand(command, ctx);
   } catch (err) {
     console.error("❌ Erro no handler:", err);
@@ -93,95 +97,147 @@ async function messageHandler(sock, msg, store) {
 }
 
 async function routeCommand(command, ctx) {
-  // Info / Menu
-  const infoList = ["lutchi", "menu", "ping", "info", "link", "regras", "setregras", "sticker", "dono", "sobre"];
-  if (infoList.includes(command)) {
-    return infoCommands[command]?.(ctx) || ctx.reply(`❌ Comando *${command}* em desenvolvimento.`);
-  }
+  const routes = {
+    // ── Info ──
+    lutchi:          () => infoCommands.lutchi(ctx),
+    menu:            () => infoCommands.menu(ctx),
+    ping:            () => infoCommands.ping(ctx),
+    info:            () => infoCommands.info(ctx),
+    link:            () => infoCommands.link(ctx),
+    regras:          () => infoCommands.regras(ctx),
+    setregras:       () => infoCommands.setregras(ctx),
+    sticker:         () => infoCommands.sticker(ctx),
+    dono:            () => infoCommands.dono(ctx),
+    sobre:           () => infoCommands.sobre(ctx),
 
-  // Admin de membros
-  const adminList = ["ban", "kick", "add", "promover", "rebaixar", "todos"];
-  if (adminList.includes(command)) {
-    if (!ctx.isGroup) return ctx.reply("❌ Esse comando só funciona em grupos!");
-    if (!ctx.isAdmin && !ctx.isOwner) return ctx.reply("❌ Apenas administradores podem usar este comando!");
-    return adminCommands[command]?.(ctx) || ctx.reply(`❌ Comando *${command}* em desenvolvimento.`);
-  }
+    // ── Admin membros ──
+    ban:             () => adminCommands.ban(ctx),
+    kick:            () => adminCommands.kick(ctx),
+    add:             () => adminCommands.add(ctx),
+    promover:        () => adminCommands.promover(ctx),
+    rebaixar:        () => adminCommands.rebaixar(ctx),
+    todos:           () => adminCommands.todos(ctx),
+    apagar:          () => adminCommands.apagar(ctx),
+    revogar:         () => adminCommands.revogar(ctx),
 
-  // Admin de grupo
-  const groupList = ["fechar", "abrir", "nome", "desc", "foto"];
-  if (groupList.includes(command)) {
-    if (!ctx.isGroup) return ctx.reply("❌ Esse comando só funciona em grupos!");
-    if (!ctx.isAdmin && !ctx.isOwner) return ctx.reply("❌ Apenas administradores podem usar este comando!");
-    return adminCommands[command]?.(ctx) || ctx.reply(`❌ Comando *${command}* em desenvolvimento.`);
-  }
+    // ── Grupo ──
+    fechar:          () => adminCommands.fechar(ctx),
+    abrir:           () => adminCommands.abrir(ctx),
+    nome:            () => adminCommands.nome(ctx),
+    desc:            () => adminCommands.desc(ctx),
+    foto:            () => adminCommands.foto(ctx),
 
-  // Moderação
-  const modList = ["warn", "warnings", "resetwarn", "mute", "unmute", "antilink", "antiflood", "banword"];
-  if (modList.includes(command)) {
-    if (!ctx.isGroup) return ctx.reply("❌ Esse comando só funciona em grupos!");
-    if (!ctx.isAdmin && !ctx.isOwner) return ctx.reply("❌ Apenas administradores podem usar este comando!");
-    return modCommands[command]?.(ctx) || ctx.reply(`❌ Comando *${command}* em desenvolvimento.`);
-  }
+    // ── Moderação ──
+    warn:            () => modCommands.warn(ctx),
+    warnings:        () => modCommands.warnings(ctx),
+    resetwarn:       () => modCommands.resetwarn(ctx),
+    mute:            () => modCommands.mute(ctx),
+    unmute:          () => modCommands.unmute(ctx),
+    antilink:        () => modCommands.antilink(ctx),
+    antiflood:       () => modCommands.antiflood(ctx),
+    banword:         () => modCommands.banword(ctx),
 
-  // Diversão
-  const funList = ["dado", "flip", "sorteio", "enquete", "citar", "calcular", "clima"];
-  if (funList.includes(command)) {
-    return funCommands[command]?.(ctx) || ctx.reply(`❌ Comando *${command}* em desenvolvimento.`);
-  }
+    // ── Downloads ──
+    play:            () => downloadCommands.play(ctx),
+    playvid:         () => downloadCommands.playvid(ctx),
+    youtube:         () => downloadCommands.youtube(ctx),
+    tiktok:          () => downloadCommands.tiktok(ctx),
+    instagram:       () => downloadCommands.instagram(ctx),
+    facebook:        () => downloadCommands.facebook(ctx),
+    kwai:            () => downloadCommands.kwai(ctx),
+    spotify:         () => downloadCommands.spotify(ctx),
+    soundcloud:      () => downloadCommands.soundcloud(ctx),
+    mediafire:       () => downloadCommands.mediafire(ctx),
+    tomp3:           () => downloadCommands.tomp3(ctx),
+    revelarft:       () => downloadCommands.revelarft(ctx),
+    clonar:          () => downloadCommands.clonar(ctx),
+    shazam:          () => downloadCommands.shazam(ctx),
 
-  await ctx.reply(`❌ Comando *${command}* não encontrado!\n\nDigite *${config.menuPrefix}* para ver o menu.`);
+    // ── Stickers ──
+    toimg:           () => stickerCommands.toimg(ctx),
+    togif:           () => stickerCommands.togif(ctx),
+    attp:            () => stickerCommands.attp(ctx),
+    ttp:             () => stickerCommands.ttp(ctx),
+    brat:            () => stickerCommands.brat(ctx),
+    emojimix:        () => stickerCommands.emojimix(ctx),
+    stickerinfo:     () => stickerCommands.stickerinfo(ctx),
+    gerarlink:       () => stickerCommands.gerarlink(ctx),
+
+    // ── Pesquisas ──
+    wikipedia:       () => pesquisaCommands.wikipedia(ctx),
+    traduzir:        () => pesquisaCommands.traduzir(ctx),
+    clima:           () => pesquisaCommands.clima(ctx),
+    dicionario:      () => pesquisaCommands.dicionario(ctx),
+    noticias:        () => pesquisaCommands.noticias(ctx),
+    movie:           () => pesquisaCommands.movie(ctx),
+    serie:           () => pesquisaCommands.serie(ctx),
+    receita:         () => pesquisaCommands.receita(ctx),
+    chatgpt:         () => pesquisaCommands.chatgpt(ctx),
+    signo:           () => pesquisaCommands.signo(ctx),
+    obesidade:       () => pesquisaCommands.obesidade(ctx),
+    flagpedia:       () => pesquisaCommands.flagpedia(ctx),
+    tinyurl:         () => pesquisaCommands.tinyurl(ctx),
+    googlesrc:       () => pesquisaCommands.googlesrc(ctx),
+    gimage:          () => pesquisaCommands.gimage(ctx),
+
+    // ── Diversão ──
+    dado:            () => brincadeiraCommands.dado(ctx),
+    flip:            () => brincadeiraCommands.flip(ctx),
+    sorteio:         () => brincadeiraCommands.sorteio(ctx),
+    enquete:         () => brincadeiraCommands.enquete(ctx),
+    citar:           () => brincadeiraCommands.citar(ctx),
+    cantadas:        () => brincadeiraCommands.cantadas(ctx),
+    conselhos:       () => brincadeiraCommands.conselhos(ctx),
+    conselhobiblico: () => brincadeiraCommands.conselhobiblico(ctx),
+    spoiler:         () => brincadeiraCommands.spoiler(ctx),
+    fazernick:       () => brincadeiraCommands.fazernick(ctx),
+    calcular:        () => brincadeiraCommands.calcular(ctx),
+    letramusica:     () => brincadeiraCommands.letramusica(ctx),
+    perfil:          () => brincadeiraCommands.perfil(ctx),
+    tabela:          () => brincadeiraCommands.tabela(ctx),
+    ddd:             () => brincadeiraCommands.ddd(ctx),
+    debate:          () => brincadeiraCommands.debate(ctx),
+  };
+
+  const handler = routes[command];
+  if (handler) return handler();
+  await ctx.reply("❌ Comando *" + command + "* não encontrado!\n\nDigite *" + config.menuPrefix + "* para ver o menu.");
 }
 
 async function passiveModeration(sock, msg, from, sender, body) {
-  // Verificar mute
   if (isMuted(from, sender)) {
-    await sock.sendMessage(from, {
-      delete: msg.key,
-    }).catch(() => {});
+    await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
     return;
   }
-
-  // Anti-link
-  if (getAntiLink(from)) {
-    const linkRegex = /(https?:\/\/|www\.|chat\.whatsapp\.com)/gi;
-    if (linkRegex.test(body)) {
-      await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-      await sock.sendMessage(from, {
-        text: `⚠️ @${sender.split("@")[0]} links não são permitidos neste grupo!`,
-        mentions: [sender],
-      });
-      return;
-    }
+  if (getAntiLink(from) && /(https?:\/\/|www\.|chat\.whatsapp\.com)/gi.test(body)) {
+    await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
+    await sock.sendMessage(from, {
+      text: "⚠️ @" + sender.split("@")[0] + " links não são permitidos!",
+      mentions: [sender],
+    });
+    return;
   }
-
-  // Anti-flood
   if (getAntiFlood(from)) {
-    const key = `${from}:${sender}`;
+    const key = from + ":" + sender;
     const now = Date.now();
     if (!floodTracker[key]) floodTracker[key] = [];
     floodTracker[key] = floodTracker[key].filter((t) => now - t < 5000);
     floodTracker[key].push(now);
     if (floodTracker[key].length > config.floodLimit) {
       await sock.sendMessage(from, {
-        text: `⚠️ @${sender.split("@")[0]} pare de fazer flood!`,
+        text: "⚠️ @" + sender.split("@")[0] + " pare de fazer flood!",
         mentions: [sender],
       });
       floodTracker[key] = [];
-      return;
     }
   }
-
-  // Banwords
   const banwords = getBanwords(from);
-  if (banwords.length > 0) {
-    const lowerBody = body.toLowerCase();
-    if (banwords.some((w) => lowerBody.includes(w))) {
-      await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-      await sock.sendMessage(from, {
-        text: `⚠️ @${sender.split("@")[0]} palavra proibida detectada!`,
-        mentions: [sender],
-      });
-    }
+  if (banwords.length > 0 && banwords.some((w) => body.toLowerCase().includes(w))) {
+    await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
+    await sock.sendMessage(from, {
+      text: "⚠️ @" + sender.split("@")[0] + " palavra proibida!",
+      mentions: [sender],
+    });
   }
 }
 
