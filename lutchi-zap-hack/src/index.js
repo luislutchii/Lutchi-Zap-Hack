@@ -3,28 +3,26 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-  downloadContentFromMessage,
 } = require("@whiskeysockets/baileys");
-const pino   = require("pino");
+const pino     = require("pino");
 const { Boom } = require("@hapi/boom");
-const path   = require("path");
-const config = require("./config/config");
+const path     = require("path");
+const axios    = require("axios");
+const config   = require("./config/config");
 const messageHandler = require("./utils/messageHandler");
-const { loadDatabase, getRules } = require("./utils/database");
+const { loadDatabase, getRules, getBoasVindas } = require("./utils/database");
 
-// JIDs banidos pelo antilink — não recebem mensagem de saída
+// JIDs banidos pelo bot — sem mensagem de saída
 const bannedByBot = new Set();
 global.bannedByBot = bannedByBot;
 
 async function startBot() {
   console.log(`
 ╔══════════════════════════════════════════╗
-║         LUTCHI ZAP HACK v1.0            ║
+║         LUTCHI ZAP HACK v1.0.0          ║
 ║   Bot de Gerenciamento WhatsApp 🤖      ║
-║   Dono: Luís Lutchi                     ║
-║   Instagram: @luislutchii               ║
-╚══════════════════════════════════════════╝
-  `);
+║   Dono: Luís Lutchi @luislutchii        ║
+╚══════════════════════════════════════════╝`);
 
   const { version }          = await fetchLatestBaileysVersion();
   const { state, saveCreds } = await useMultiFileAuthState(
@@ -46,24 +44,26 @@ async function startBot() {
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
     if (qr) {
-      try { const generateQR = require("./qr"); generateQR(qr); } catch (_) {}
+      try { require("./qr")(qr); } catch (_) {}
       console.log("\n📱 Escaneie o QR Code!\n");
     }
     if (connection === "close") {
-      const shouldReconnect =
-        new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-      if (shouldReconnect) {
-        console.log("🔄 Reconectando...");
+      const code = new Boom(lastDisconnect?.error)?.output?.statusCode;
+      if (code !== DisconnectReason.loggedOut) {
+        console.log("🔄 Reconectando em 5s...");
         setTimeout(() => startBot(), 5000);
       } else {
-        console.log("🚪 Sessão encerrada.");
+        console.log("🚪 Sessão encerrada. Delete data/session e reinicie.");
         process.exit(0);
       }
     } else if (connection === "open") {
-      console.log("✅ Bot conectado com sucesso!");
-      const ownerJid = `${config.owner.number}@s.whatsapp.net`;
-      await sock.sendMessage(ownerJid, {
-        text: `🤖 *${config.botName}* iniciou com sucesso!\n\n⚡ Prefixo: *${config.prefix}*\n📋 Menu: *${config.prefix}lutchi*`,
+      console.log("✅ Lutchi Zap Hack conectado!");
+      await sock.sendMessage(`${config.owner.number}@s.whatsapp.net`, {
+        text:
+          `🤖 *${config.botName}* iniciou!\n\n` +
+          `⚡ Prefixo: *${config.prefix}*\n` +
+          `📋 Menu: *${config.prefix}lutchi*\n` +
+          `🕐 ${new Date().toLocaleString("pt-AO")}`,
       }).catch(() => {});
     }
   });
@@ -74,13 +74,12 @@ async function startBot() {
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
     for (const msg of messages) {
-      if (!msg.message) continue;
-      if (msg.key.fromMe) continue;
+      if (!msg.message || msg.key.fromMe) continue;
       await messageHandler(sock, msg, null);
     }
   });
 
-  // ── Entradas e saídas ─────────────────────────────────────────
+  // ── Entradas / Saídas ─────────────────────────────────────────
   sock.ev.on("group-participants.update", async ({ id, participants, action }) => {
     const groupMeta = await sock.groupMetadata(id).catch(() => null);
     if (!groupMeta) return;
@@ -89,46 +88,39 @@ async function startBot() {
       const num = participant.split("@")[0];
 
       if (action === "add") {
-        // Busca regras do grupo
+        // Só envia boas-vindas se estiver activado no grupo
+        if (!getBoasVindas(id)) continue;
+
         const regras = getRules(id) || config.defaultRules;
 
-        // Mensagem de boas-vindas com pedido de apresentação
         const welcomeText =
-          `👋 *Bem-vindo(a)* @${num} ao grupo *${groupMeta.subject}*!\n\n` +
-          `📸 Por favor, apresenta-te com:\n` +
-          `• *Nome:*\n` +
-          `• *Idade:*\n` +
-          `• *Morada:*\n` +
-          `• *País:*\n\n` +
+          `👋 *Bem-vindo(a)* @${num} ao *${groupMeta.subject}*!\n\n` +
+          `📸 Por favor apresenta-te com:\n` +
+          `› 👤 *Nome:*\n` +
+          `› 🎂 *Idade:*\n` +
+          `› 📍 *Morada:*\n` +
+          `› 🌍 *País:*\n\n` +
           `📋 *REGRAS DO GRUPO:*\n${regras}\n\n` +
           `_🤖 Lutchi Zap Hack_`;
 
-        // Tenta enviar com foto de perfil
         try {
           const ppUrl = await sock.profilePictureUrl(participant, "image").catch(() => null);
           if (ppUrl) {
-            const axios = require("axios");
-            const res   = await axios.get(ppUrl, { responseType: "arraybuffer" });
+            const res = await axios.get(ppUrl, { responseType: "arraybuffer", timeout: 8000 });
             await sock.sendMessage(id, {
               image: Buffer.from(res.data),
               caption: welcomeText,
               mentions: [participant],
             });
           } else {
-            await sock.sendMessage(id, {
-              text: welcomeText,
-              mentions: [participant],
-            });
+            await sock.sendMessage(id, { text: welcomeText, mentions: [participant] });
           }
         } catch {
-          await sock.sendMessage(id, {
-            text: welcomeText,
-            mentions: [participant],
-          });
+          await sock.sendMessage(id, { text: welcomeText, mentions: [participant] }).catch(() => {});
         }
 
       } else if (action === "remove") {
-        // Não envia mensagem se foi banido pelo bot (antilink, blacklist)
+        // Não envia saída se foi banido pelo bot
         if (global.bannedByBot.has(participant)) {
           global.bannedByBot.delete(participant);
           continue;
@@ -136,12 +128,12 @@ async function startBot() {
         await sock.sendMessage(id, {
           text: `😢 @${num} saiu do grupo.`,
           mentions: [participant],
-        });
+        }).catch(() => {});
       }
     }
   });
 }
 
 startBot().catch(console.error);
-process.on("uncaughtException",  (err) => console.error("❌ Erro:", err.message));
-process.on("unhandledRejection", (err) => console.error("❌ Promise:", err?.message || err));
+process.on("uncaughtException",  (err) => console.error("❌", err.message));
+process.on("unhandledRejection", (err) => console.error("❌", err?.message || err));
