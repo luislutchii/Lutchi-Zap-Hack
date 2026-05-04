@@ -16,53 +16,149 @@ async function lutchi(ctx) {
   const { sock, from, msg } = ctx;
 
   const caption =
-    "╔══════════════════════════════════════╗\n" +
-    "║   🤖  *LUTCHI ZAP HACK*  🤖         ║\n" +
-    "║      Bot de Grupos WhatsApp          ║\n" +
-    "╚══════════════════════════════════════╝\n\n" +
+    "🤖 *LUTCHI ZAP HACK* 🤖\n" +
+    "〘 Bot de Grupos WhatsApp 〙\n\n" +
     "👑 *Dono:* " + config.owner.name + "\n" +
     "📸 *Instagram:* @" + config.owner.instagram + "\n" +
     "🇦🇴 *País:* Angola\n" +
     "🔖 *Versão:* v1.0.0\n" +
-    "⚡ *Prefixo:* `" + p + "`\n\n" +
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-    "╭──「 📋 *INFORMAÇÕES* 」──╮\n" +
-    "│ .lutchi .menu .ping .info\n" +
-    "│ .dono .sobre .link .regras\n" +
-    "╰──────────────────────╯\n\n" +
-    "╭──「 👥 *MEMBROS* (Admin) 」──╮\n" +
-    "│ .ban .kick .add .promover\n" +
-    "│ .rebaixar .todos .clonar\n" +
-    "╰──────────────────────╯\n\n" +
-    "╭──「 ⚙️ *GRUPO* (Admin) 」──╮\n" +
-    "│ .fechar .abrir .nome .desc\n" +
-    "│ .foto .revogar .apagar .boasvindas\n" +
-    "╰──────────────────────╯\n\n" +
-    "╭──「 🛡️ *MODERAÇÃO* (Admin) 」──╮\n" +
-    "│ .warn .warnings .resetwarn\n" +
-    "│ .mute .unmute .antilink\n" +
-    "│ .antiflood .banword\n" +
-    "╰──────────────────────╯\n\n" +
-    "╭──「 📥 *DOWNLOADS* 」──╮\n" +
-    "│ .play .playvid .youtube .tiktok\n" +
-    "│ .instagram .facebook .kwai\n" +
-    "│ .spotify .tomp3 .revelarft\n" +
-    "╰──────────────────────╯\n\n" +
-    "╭──「 🎨 *STICKERS* 」──╮\n" +
-    "│ .sticker .toimg .togif\n" +
-    "│ .attp .ttp .brat .emojimix\n" +
-    "╰──────────────────────╯\n\n" +
-    "╭──「 🔍 *PESQUISAS* 」──╮\n" +
-    "│ .wikipedia .traduzir .clima\n" +
-    "│ .chatgpt .movie .serie .receita\n" +
-    "╰──────────────────────╯\n\n" +
-    "╭──「 🎮 *DIVERSÃO* 」──╮\n" +
-    "│ .dado .flip .sorteio .enquete\n" +
-    "│ .cantadas .conselhos .calcular\n" +
-    "╰──────────────────────╯\n\n" +
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-    "🌐 _github.com/luislutchii/Lutchi-Zap-Hack_\n" +
-    "📸 _@luislutchii_ | 🇦🇴 _Angola_ | 🤖 _v1.0.0_";
+    "⚡ *Prefixo:* " + p + "\n\n" +
+
+    "─────────────────────\n" +
+    "📋 *INFORMAÇÕES*\n" +
+    "─────────────────────\n" +
+    p + "lutchi — Menu principal\n" +
+    p + "ping — Testar o bot\n" +
+    p + "info — Info do bot\n" +
+    p + "dono — Contato do dono\n" +
+    p + "sobre — Sobre o bot\n" +
+    p + "link — Link do grupo\n" +
+    p + "regras — Ver regras\n" +
+    p + "setregras — Definir regras\n\n" +
+
+    "─────────────────────\n" +
+    "👥 *MEMBROS* _(Admin)_\n" +
+    "─────────────────────\n" +
+    p + "ban — Banir membro\n" +
+    p + "kick — Expulsar membro\n" +
+    p + "add — Adicionar membro\n" +
+    p + "promover — Tornar admin\n" +
+    p + "rebaixar — Remover admin\n" +
+    p + "todos — Marcar todos\n" +
+    p + "clonar — Clonar grupo\n\n" +
+
+    "─────────────────────\n" +
+    "⚙️ *GRUPO* _(Admin)_\n" +
+    "─────────────────────\n" +
+    p + "fechar — Fechar grupo\n" +
+    p + "abrir — Abrir grupo\n" +
+    p + "nome — Mudar nome\n" +
+    p + "desc — Mudar descrição\n" +
+    p + "foto — Mudar foto\n" +
+    p + "revogar — Revogar link\n" +
+    p + "apagar — Apagar mensagem\n" +
+    p + "boasvindas — on/off\n\n" +
+
+    "─────────────────────\n" +
+    "🛡️ *MODERAÇÃO* _(Admin)_\n" +
+    "─────────────────────\n" +
+    p + "warn — Advertir membro\n" +
+    p + "warnings — Ver advertências\n" +
+    p + "resetwarn — Resetar warns\n" +
+    p + "mute — Mutar membro\n" +
+    p + "unmute — Desmutar membro\n" +
+    p + "antilink — on/off\n" +
+    p + "antiflood — on/off\n" +
+    p + "banword — Banir palavra\n" +
+    p + "delbanword — Remover palavra\n" +
+    p + "limparbanword — Limpar tudo\n\n" +
+
+    "─────────────────────\n" +
+    "🤖 *CONTROLE DO BOT* _(Dono)_\n" +
+    "─────────────────────\n" +
+    p + "ligarbot — Ligar bot\n" +
+    p + "desligarbot — Desligar bot\n" +
+    p + "modobot — todos/admins\n\n" +
+
+    "─────────────────────\n" +
+    "🎙️ *DEBATE*\n" +
+    "─────────────────────\n" +
+    p + "debate — Iniciar debate\n" +
+    p + "favor — Votar a favor\n" +
+    p + "contra — Votar contra\n" +
+    p + "votos — Ver votos\n" +
+    p + "fimdebate — Encerrar\n\n" +
+
+    "─────────────────────\n" +
+    "📥 *DOWNLOADS*\n" +
+    "─────────────────────\n" +
+    p + "play — Baixar música\n" +
+    p + "playvid — Baixar vídeo\n" +
+    p + "youtube — Pesquisar YT\n" +
+    p + "tiktok — Baixar TikTok\n" +
+    p + "instagram — Baixar IG\n" +
+    p + "facebook — Baixar FB\n" +
+    p + "kwai — Baixar Kwai\n" +
+    p + "spotify — Baixar Spotify\n" +
+    p + "soundcloud — Baixar SC\n" +
+    p + "mediafire — Baixar MF\n" +
+    p + "tomp3 — Vídeo para MP3\n" +
+    p + "revelarft — Revelar foto\n\n" +
+
+    "─────────────────────\n" +
+    "🎨 *STICKERS*\n" +
+    "─────────────────────\n" +
+    p + "sticker — Criar sticker\n" +
+    p + "toimg — Sticker para img\n" +
+    p + "togif — Sticker para gif\n" +
+    p + "attp — Texto animado\n" +
+    p + "ttp — Texto para sticker\n" +
+    p + "brat — Sticker brat\n" +
+    p + "emojimix — Misturar emojis\n" +
+    p + "stickerinfo — Info sticker\n" +
+    p + "gerarlink — Link da imagem\n\n" +
+
+    "─────────────────────\n" +
+    "🔍 *PESQUISAS*\n" +
+    "─────────────────────\n" +
+    p + "wikipedia — Pesquisar Wiki\n" +
+    p + "traduzir — Traduzir texto\n" +
+    p + "clima — Ver clima\n" +
+    p + "dicionario — Ver definição\n" +
+    p + "noticias — Ver notícias\n" +
+    p + "movie — Info de filme\n" +
+    p + "serie — Info de série\n" +
+    p + "receita — Ver receita\n" +
+    p + "chatgpt — Perguntar IA\n" +
+    p + "signo — Ver signo\n" +
+    p + "obesidade — Calcular IMC\n" +
+    p + "flagpedia — Bandeira país\n" +
+    p + "tinyurl — Encurtar link\n" +
+    p + "googlesrc — Pesquisar Google\n" +
+    p + "gimage — Buscar imagem\n\n" +
+
+    "─────────────────────\n" +
+    "🎮 *DIVERSÃO*\n" +
+    "─────────────────────\n" +
+    p + "dado — Lançar dado\n" +
+    p + "flip — Cara ou coroa\n" +
+    p + "sorteio — Sortear membro\n" +
+    p + "enquete — Criar enquete\n" +
+    p + "citar — Citar mensagem\n" +
+    p + "cantadas — Enviar cantada\n" +
+    p + "conselhos — Ver conselho\n" +
+    p + "conselhobiblico — Bíblia\n" +
+    p + "spoiler — Texto spoiler\n" +
+    p + "fazernick — Criar nick\n" +
+    p + "calcular — Calcular\n" +
+    p + "letramusica — Letra música\n" +
+    p + "perfil — Ver perfil\n" +
+    p + "tabela — Tabela do nick\n" +
+    p + "ddd — Consultar DDD\n\n" +
+
+    "─────────────────────\n" +
+    "🌐 github.com/luislutchii/Lutchi-Zap-Hack\n" +
+    "📸 @luislutchii | 🇦🇴 Angola | v1.0.0";
 
   const image = await getMenuImage();
   if (image) {
@@ -78,14 +174,13 @@ async function ping(ctx) {
   const { sock, from, msg } = ctx;
   const start = Date.now();
   const latencia = Date.now() - start;
-
   await sock.sendMessage(from, {
     text:
       "🏓 *PONG!*\n\n" +
       "⚡ Latência: *" + latencia + "ms*\n" +
       "🟢 Status: *Online*\n" +
-      "🤖 Bot: *Lutchi Zap Hack*",
-    }, { quoted: msg });
+      "🤖 Bot: *" + config.botName + "*",
+  }, { quoted: msg });
 }
 
 async function info(ctx) {
@@ -94,7 +189,6 @@ async function info(ctx) {
   const h = Math.floor(uptime / 3600);
   const m = Math.floor((uptime % 3600) / 60);
   const s = Math.floor(uptime % 60);
-
   const image = await getMenuImage();
   const text =
     "🤖 *INFORMAÇÕES DO BOT*\n\n" +
@@ -105,10 +199,9 @@ async function info(ctx) {
     "🔖 *Prefixo:* " + config.prefix + "\n" +
     "📚 *Biblioteca:* Baileys + yt-dlp\n" +
     "⏱️ *Uptime:* " + h + "h " + m + "m " + s + "s\n" +
-    "⚡ *Versão:* 1.0.0\n" +
+    "⚡ *Versão:* v1.0.0\n" +
     "🌍 *País:* Angola 🇦🇴\n" +
     "🌐 *GitHub:* github.com/luislutchii/Lutchi-Zap-Hack";
-
   if (image) {
     await sock.sendMessage(from, { image, caption: text }, { quoted: msg });
   } else {
@@ -166,7 +259,6 @@ async function dono(ctx) {
     "📱 *WhatsApp:* wa.me/" + config.owner.number + "\n" +
     "📸 *Instagram:* instagram.com/" + config.owner.instagram + "\n\n" +
     "_Entre em contato para mais informações!_";
-
   if (image) {
     await sock.sendMessage(from, { image, caption: text }, { quoted: msg });
   } else {
@@ -179,7 +271,8 @@ async function sobre(ctx) {
   const image = await getMenuImage();
   const text =
     "🤖 *SOBRE O LUTCHI ZAP HACK*\n\n" +
-    "Bot completo de gerenciamento de grupos WhatsApp desenvolvido por *Luís Lutchi*.\n\n" +
+    "Bot completo de gerenciamento de grupos WhatsApp\n" +
+    "desenvolvido por *Luís Lutchi*.\n\n" +
     "🛡️ Moderação avançada\n" +
     "📥 Downloads (YouTube, TikTok, Instagram...)\n" +
     "🎨 Stickers e conversões\n" +
@@ -189,9 +282,8 @@ async function sobre(ctx) {
     "🔓 Revelar fotos únicas\n\n" +
     "📚 *Tecnologia:* Baileys + Node.js + yt-dlp\n" +
     "🌍 *Feito em Angola* 🇦🇴\n" +
-    "🌐 *GitHub:* github.com/luislutchii/Lutchi-Zap-Hack\n" +
-    "📸 *@" + config.owner.instagram + "*";
-
+    "🌐 github.com/luislutchii/Lutchi-Zap-Hack\n" +
+    "📸 @" + config.owner.instagram;
   if (image) {
     await sock.sendMessage(from, { image, caption: text }, { quoted: msg });
   } else {
