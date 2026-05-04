@@ -1,14 +1,8 @@
-const config = require("../config/config");
-const { getRules, setRules } = require("../utils/database");
+const config = require("../config/config");                                      const { getRules, setRules } = require("../utils/database");
 const p = config.prefix;
-
-async function lutchi(ctx) {
-  const { sock, from, msg, isAdmin, isOwner } = ctx;
-  if (!isAdmin && !isOwner) return;
-
-  const menu =
-    "╔══════════════════════════════════════╗\n" +
-    "║   🤖  *LUTCHI ZAP HACK*  🤖         ║\n" +
+                                                                                 async function lutchi(ctx) {                                                       const { sock, from, msg, isAdmin, isOwner } = ctx;
+  if (!isAdmin && !isOwner) return;                                              
+  const menu =                                                                       "╔══════════════════════════════════════╗\n" +                                   "║   🤖  *LUTCHI ZAP HACK*  🤖         ║\n" +
     "║      Bot de Grupos WhatsApp          ║\n" +
     "╚══════════════════════════════════════╝\n\n" +
     "👑 *Dono:* " + config.owner.name + "\n" +
@@ -25,10 +19,7 @@ async function lutchi(ctx) {
     "│ .info\n" +
     "│ .dono\n" +
     "│ .sobre\n" +
-    "│ .link\n" +
-    "│ .regras\n" +
-    "│ .setregras\n" +
-    "╰──────────────────────╯\n\n" +
+    "│ .link\n" +                                                                    "│ .regras\n" +                                                                  "│ .setregras\n" +                                                               "╰──────────────────────╯\n\n" +
 
     "╭──「 👥 *MEMBROS* (Admin) 」──╮\n" +
     "│ .ban @membro\n" +
@@ -141,7 +132,7 @@ async function lutchi(ctx) {
     "🌐 _github.com/luislutchii/Lutchi-Zap-Hack_\n" +
     "📸 _@luislutchii_ | 🇦🇴 _Angola_ | 🤖 _v1.0.0_";
 
-  return sock.sendMessage(from, { text: menu }, { quoted: msg });
+  return sock.sendMessage(from, { image: { url: "https://i.ibb.co/NnNcQnj0/Picsart-26-05-03-21-22-37-529.png" }, caption: menu }, { quoted: msg });
 }
 
 async function menu(ctx) { return lutchi(ctx); }
