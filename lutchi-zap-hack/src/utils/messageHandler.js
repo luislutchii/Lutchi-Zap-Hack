@@ -9,6 +9,7 @@ const stickerCommands     = require("../commands/stickers");
 const pesquisaCommands    = require("../commands/pesquisas");
 const brincadeiraCommands = require("../commands/brincadeiras");
 const extrasCommands      = require("../commands/extras");
+const debateCommands      = require("../commands/debate");
 
 const floodTracker = {};
 
@@ -19,7 +20,7 @@ const PUBLIC_COMMANDS = new Set([
   "cantadas", "spoiler", "fazernick", "calcular",
   "letramusica", "tabela", "signo", "obesidade",
   "clima", "traduzir", "wikipedia", "dicionario",
-  "tinyurl", "googlesrc", "gimage", "wame", "sistema",
+  "tinyurl", "googlesrc", "gimage", "wame", "sistema", "temadebate", "favor", "contra", "votos",
 ]);
 
 function normalizeId(jid = "") {
@@ -215,11 +216,13 @@ async function routeCommand(command, ctx) {
     antiflood:       () => modCommands.antiflood(ctx),
     banword:         () => modCommands.banword(ctx),
     // ── Debate ──────────────────────────────────────────────
-    debate:          () => iniciarDebate(ctx),
-    favor:           () => votoFavor(ctx),
-    contra:          () => votoContra(ctx),
-    votos:           () => verVotos(ctx),
-    fimdebate:       () => fimDebate(ctx),
+    debate:          () => debateCommands.debate(ctx),
+    favor:           () => debateCommands.votoFavor(ctx),
+    novotema:        () => debateCommands.novotema(ctx),
+    temadebate:      () => debateCommands.temadebate(ctx),
+    contra:          () => debateCommands.votoContra(ctx),
+    votos:           () => debateCommands.verVotos(ctx),
+    fimdebate:       () => debateCommands.fimDebate(ctx),
     // ── Extras ──────────────────────────────────────────────
     agendarmsg:      () => extrasCommands.agendarmsg(ctx),
     marcar:          () => extrasCommands.marcar(ctx),
