@@ -1,8 +1,23 @@
-const config = require("../config/config");                                      const { getRules, setRules } = require("../utils/database");
+const config = require("../config/config");
+const { getRules, setRules } = require("../utils/database");
+const axios = require("axios");
 const p = config.prefix;
-                                                                                 async function lutchi(ctx) {                                                       const { sock, from, msg, isAdmin, isOwner } = ctx;
-  if (!isAdmin && !isOwner) return;                                              
-  const menu =                                                                       "╔══════════════════════════════════════╗\n" +                                   "║   🤖  *LUTCHI ZAP HACK*  🤖         ║\n" +
+
+const MENU_IMAGE_URL = "https://i.ibb.co/NnNcQnj0/Picsart-26-05-03-21-22-37-529.png";
+
+async function getMenuImage() {
+  try {
+    const res = await axios.get(MENU_IMAGE_URL, { responseType: "arraybuffer", timeout: 10000 });
+    return Buffer.from(res.data);
+  } catch { return null; }
+}
+
+async function lutchi(ctx) {
+  const { sock, from, msg } = ctx;
+
+  const caption =
+    "╔══════════════════════════════════════╗\n" +
+    "║   🤖  *LUTCHI ZAP HACK*  🤖         ║\n" +
     "║      Bot de Grupos WhatsApp          ║\n" +
     "╚══════════════════════════════════════╝\n\n" +
     "👑 *Dono:* " + config.owner.name + "\n" +
@@ -11,146 +26,77 @@ const p = config.prefix;
     "🔖 *Versão:* v1.0.0\n" +
     "⚡ *Prefixo:* `" + p + "`\n\n" +
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-
     "╭──「 📋 *INFORMAÇÕES* 」──╮\n" +
-    "│ .lutchi\n" +
-    "│ .menu\n" +
-    "│ .ping\n" +
-    "│ .info\n" +
-    "│ .dono\n" +
-    "│ .sobre\n" +
-    "│ .link\n" +                                                                    "│ .regras\n" +                                                                  "│ .setregras\n" +                                                               "╰──────────────────────╯\n\n" +
-
+    "│ .lutchi .menu .ping .info\n" +
+    "│ .dono .sobre .link .regras\n" +
+    "╰──────────────────────╯\n\n" +
     "╭──「 👥 *MEMBROS* (Admin) 」──╮\n" +
-    "│ .ban @membro\n" +
-    "│ .kick @membro\n" +
-    "│ .add 244XXXXXXXXX\n" +
-    "│ .promover @membro\n" +
-    "│ .rebaixar @membro\n" +
-    "│ .todos <mensagem>\n" +
-    "│ .clonar <link do grupo>\n" +
+    "│ .ban .kick .add .promover\n" +
+    "│ .rebaixar .todos .clonar\n" +
     "╰──────────────────────╯\n\n" +
-
     "╭──「 ⚙️ *GRUPO* (Admin) 」──╮\n" +
-    "│ .fechar\n" +
-    "│ .abrir\n" +
-    "│ .nome <novo nome>\n" +
-    "│ .desc <nova descrição>\n" +
-    "│ .foto (responda imagem)\n" +
-    "│ .revogar\n" +
-    "│ .apagar\n" +
-    "│ .boasvindas on/off\n" +
+    "│ .fechar .abrir .nome .desc\n" +
+    "│ .foto .revogar .apagar .boasvindas\n" +
     "╰──────────────────────╯\n\n" +
-
     "╭──「 🛡️ *MODERAÇÃO* (Admin) 」──╮\n" +
-    "│ .warn @membro\n" +
-    "│ .warnings @membro\n" +
-    "│ .resetwarn @membro\n" +
-    "│ .mute @membro <minutos>\n" +
-    "│ .unmute @membro\n" +
-    "│ .antilink on/off\n" +
-    "│ .antiflood on/off\n" +
-    "│ .banword <palavra>\n" +
-    "│ .delbanword <palavra>\n" +
-    "│ .limparbanword\n" +
+    "│ .warn .warnings .resetwarn\n" +
+    "│ .mute .unmute .antilink\n" +
+    "│ .antiflood .banword\n" +
     "╰──────────────────────╯\n\n" +
-
-    "╭──「 🤖 *CONTROLE DO BOT* (Dono) 」──╮\n" +
-    "│ .ligarbot\n" +
-    "│ .desligarbot\n" +
-    "│ .modobot todos/admins\n" +
-    "╰──────────────────────╯\n\n" +
-
-    "╭──「 🎙️ *DEBATE* 」──╮\n" +
-    "│ .debate <tema>\n" +
-    "╰──────────────────────╯\n\n" +
-
     "╭──「 📥 *DOWNLOADS* 」──╮\n" +
-    "│ .play <nome da música>\n" +
-    "│ .playvid <nome do vídeo>\n" +
-    "│ .youtube <pesquisa>\n" +
-    "│ .tiktok <link>\n" +
-    "│ .instagram <link>\n" +
-    "│ .facebook <link>\n" +
-    "│ .kwai <link>\n" +
-    "│ .spotify <link>\n" +
-    "│ .soundcloud <link>\n" +
-    "│ .mediafire <link>\n" +
-    "│ .tomp3 (responda vídeo)\n" +
-    "│ .revelarft (responda ft)\n" +
+    "│ .play .playvid .youtube .tiktok\n" +
+    "│ .instagram .facebook .kwai\n" +
+    "│ .spotify .tomp3 .revelarft\n" +
     "╰──────────────────────╯\n\n" +
-
     "╭──「 🎨 *STICKERS* 」──╮\n" +
-    "│ .sticker (responda img/vid)\n" +
-    "│ .toimg (responda sticker)\n" +
-    "│ .togif (responda sticker)\n" +
-    "│ .attp <texto>\n" +
-    "│ .ttp <texto>\n" +
-    "│ .brat <texto>\n" +
-    "│ .emojimix 😀🔥\n" +
-    "│ .stickerinfo (responda)\n" +
-    "│ .gerarlink (responda img)\n" +
+    "│ .sticker .toimg .togif\n" +
+    "│ .attp .ttp .brat .emojimix\n" +
     "╰──────────────────────╯\n\n" +
-
     "╭──「 🔍 *PESQUISAS* 」──╮\n" +
-    "│ .wikipedia <assunto>\n" +
-    "│ .traduzir <lang> <texto>\n" +
-    "│ .clima <cidade>\n" +
-    "│ .dicionario <palavra>\n" +
-    "│ .noticias <tema>\n" +
-    "│ .movie <nome do filme>\n" +
-    "│ .serie <nome da série>\n" +
-    "│ .receita <prato>\n" +
-    "│ .chatgpt <pergunta>\n" +
-    "│ .signo <nome>\n" +
-    "│ .obesidade <peso> <altura>\n" +
-    "│ .flagpedia <país>\n" +
-    "│ .tinyurl <link>\n" +
-    "│ .googlesrc <pesquisa>\n" +
-    "│ .gimage <pesquisa>\n" +
+    "│ .wikipedia .traduzir .clima\n" +
+    "│ .chatgpt .movie .serie .receita\n" +
     "╰──────────────────────╯\n\n" +
-
     "╭──「 🎮 *DIVERSÃO* 」──╮\n" +
-    "│ .dado <faces>\n" +
-    "│ .flip\n" +
-    "│ .sorteio\n" +
-    "│ .enquete P? | Op1 | Op2\n" +
-    "│ .citar (responda msg)\n" +
-    "│ .cantadas @membro\n" +
-    "│ .conselhos\n" +
-    "│ .conselhobiblico\n" +
-    "│ .spoiler <texto>\n" +
-    "│ .fazernick <nome>\n" +
-    "│ .calcular <expressão>\n" +
-    "│ .letramusica <nome>\n" +
-    "│ .perfil @membro\n" +
-    "│ .tabela <nick>\n" +
-    "│ .ddd <código>\n" +
+    "│ .dado .flip .sorteio .enquete\n" +
+    "│ .cantadas .conselhos .calcular\n" +
     "╰──────────────────────╯\n\n" +
-
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
     "🌐 _github.com/luislutchii/Lutchi-Zap-Hack_\n" +
     "📸 _@luislutchii_ | 🇦🇴 _Angola_ | 🤖 _v1.0.0_";
 
-  return sock.sendMessage(from, { image: { url: "https://i.ibb.co/NnNcQnj0/Picsart-26-05-03-21-22-37-529.png" }, caption: menu }, { quoted: msg });
+  const image = await getMenuImage();
+  if (image) {
+    await sock.sendMessage(from, { image, caption }, { quoted: msg });
+  } else {
+    await sock.sendMessage(from, { text: caption }, { quoted: msg });
+  }
 }
 
 async function menu(ctx) { return lutchi(ctx); }
 
 async function ping(ctx) {
-  const { reply } = ctx;
+  const { sock, from, msg } = ctx;
   const start = Date.now();
-  await reply("🏓 Calculando...");
-  return reply("🏓 *Pong!*\n\n⚡ Latência: *" + (Date.now() - start) + "ms*");
+  const latencia = Date.now() - start;
+
+  await sock.sendMessage(from, {
+    text:
+      "🏓 *PONG!*\n\n" +
+      "⚡ Latência: *" + latencia + "ms*\n" +
+      "🟢 Status: *Online*\n" +
+      "🤖 Bot: *Lutchi Zap Hack*",
+    }, { quoted: msg });
 }
 
 async function info(ctx) {
-  const { reply } = ctx;
+  const { sock, from, msg } = ctx;
   const uptime = process.uptime();
   const h = Math.floor(uptime / 3600);
   const m = Math.floor((uptime % 3600) / 60);
   const s = Math.floor(uptime % 60);
-  return reply(
+
+  const image = await getMenuImage();
+  const text =
     "🤖 *INFORMAÇÕES DO BOT*\n\n" +
     "📛 *Nome:* " + config.botName + "\n" +
     "👑 *Dono:* " + config.owner.name + "\n" +
@@ -161,8 +107,13 @@ async function info(ctx) {
     "⏱️ *Uptime:* " + h + "h " + m + "m " + s + "s\n" +
     "⚡ *Versão:* 1.0.0\n" +
     "🌍 *País:* Angola 🇦🇴\n" +
-    "🌐 *GitHub:* github.com/luislutchii/Lutchi-Zap-Hack"
-  );
+    "🌐 *GitHub:* github.com/luislutchii/Lutchi-Zap-Hack";
+
+  if (image) {
+    await sock.sendMessage(from, { image, caption: text }, { quoted: msg });
+  } else {
+    await sock.sendMessage(from, { text }, { quoted: msg });
+  }
 }
 
 async function link(ctx) {
@@ -207,17 +158,26 @@ async function sticker(ctx) {
 }
 
 async function dono(ctx) {
-  return ctx.reply(
+  const { sock, from, msg } = ctx;
+  const image = await getMenuImage();
+  const text =
     "👑 *DONO DO BOT*\n\n" +
     "📛 *Nome:* " + config.owner.name + "\n" +
     "📱 *WhatsApp:* wa.me/" + config.owner.number + "\n" +
     "📸 *Instagram:* instagram.com/" + config.owner.instagram + "\n\n" +
-    "_Entre em contato para mais informações!_"
-  );
+    "_Entre em contato para mais informações!_";
+
+  if (image) {
+    await sock.sendMessage(from, { image, caption: text }, { quoted: msg });
+  } else {
+    await sock.sendMessage(from, { text }, { quoted: msg });
+  }
 }
 
 async function sobre(ctx) {
-  return ctx.reply(
+  const { sock, from, msg } = ctx;
+  const image = await getMenuImage();
+  const text =
     "🤖 *SOBRE O LUTCHI ZAP HACK*\n\n" +
     "Bot completo de gerenciamento de grupos WhatsApp desenvolvido por *Luís Lutchi*.\n\n" +
     "🛡️ Moderação avançada\n" +
@@ -230,8 +190,13 @@ async function sobre(ctx) {
     "📚 *Tecnologia:* Baileys + Node.js + yt-dlp\n" +
     "🌍 *Feito em Angola* 🇦🇴\n" +
     "🌐 *GitHub:* github.com/luislutchii/Lutchi-Zap-Hack\n" +
-    "📸 *@" + config.owner.instagram + "*"
-  );
+    "📸 *@" + config.owner.instagram + "*";
+
+  if (image) {
+    await sock.sendMessage(from, { image, caption: text }, { quoted: msg });
+  } else {
+    await sock.sendMessage(from, { text }, { quoted: msg });
+  }
 }
 
 module.exports = { lutchi, menu, ping, info, link, regras, setregras, sticker, dono, sobre };
