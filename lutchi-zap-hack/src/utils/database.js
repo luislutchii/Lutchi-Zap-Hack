@@ -130,3 +130,14 @@ module.exports = {
   setModoBot, getModoBot,
   setBoasVindas, getBoasVindas,
 };
+
+function saveOwnerLid(lid) {
+  db.ownerLid = lid;
+  saveDatabase();
+}
+
+function getOwnerLid() {
+  return db.ownerLid || null;
+}
+
+module.exports = Object.assign(module.exports, { saveOwnerLid, getOwnerLid });

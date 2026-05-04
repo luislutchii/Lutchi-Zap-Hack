@@ -88,7 +88,9 @@ async function startBot() {
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
     for (const msg of messages) {
-      if (!msg.message || msg.key.fromMe) continue;
+      if (!msg.message) continue;
+      const msgBody = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+      if (msg.key.fromMe && !msgBody.startsWith(".")) continue;
       await messageHandler(sock, msg, null);
     }
   });

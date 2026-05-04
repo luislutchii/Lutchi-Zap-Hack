@@ -34,16 +34,46 @@ function matchParticipant(participantId, phoneNum, lidNum) {
 
 function checkIsOwner(sender, groupMeta) {
   const ownerPhone = config.owner.number;
+  const senderNorm = normalizeId(sender);
+
+  // Comparação direta com número de telefone
+  if (senderNorm === ownerPhone) return true;
   if (sender.includes(ownerPhone)) return true;
+
+  // Verificar via participantes do grupo (resolver LID -> número)
   if (groupMeta) {
-    const senderNum = normalizeId(sender);
     for (const p of groupMeta.participants) {
-      if (normalizeId(p.id) === senderNum) {
+      const pPhone = normalizeId(p.id);
+      const pLid   = p.lidJid ? normalizeId(p.lidJid) : null;
+
+      // O remetente é este participante? (por número ou por LID)
+      const isSender =
+        pPhone === senderNorm ||
+        (pLid && pLid === senderNorm) ||
+        p.id.includes(senderNorm) ||
+        (p.lidJid && p.lidJid.includes(senderNorm));
+
+      if (isSender) {
+        // Este participante é o dono?
+        if (pPhone === ownerPhone) return true;
         if (p.id.includes(ownerPhone)) return true;
-        if (p.lidJid && p.lidJid.includes(ownerPhone)) return true;
       }
     }
   }
+
+  // Verificar LID do dono salvo no config
+  const ownerLid = config.owner.lid;
+  if (ownerLid && senderNorm === normalizeId(ownerLid)) return true;
+
+  // Verificar se o sender LID corresponde ao dono via sock.user
+  // O LID do dono é salvo no primeiro login
+  const ownerLidKey = 'ownerLid';
+  try {
+    const db = require('./database');
+    const savedLid = db.getOwnerLid ? db.getOwnerLid() : null;
+    if (savedLid && senderNorm === normalizeId(savedLid)) return true;
+  } catch (_) {}
+
   return false;
 }
 
@@ -111,6 +141,7 @@ async function messageHandler(sock, msg, store) {
     const isOwner = checkIsOwner(sender, groupMeta);
 
     console.log("👤 isAdmin:", isAdmin, "| isOwner:", isOwner, "| isGroup:", isGroup);
+    console.log("🔍 sender:", sender, "| normalizado:", normalizeId(sender));
 
     if (isGroup && !isAdmin && !isOwner) {
       if (!PUBLIC_COMMANDS.has(command)) {
