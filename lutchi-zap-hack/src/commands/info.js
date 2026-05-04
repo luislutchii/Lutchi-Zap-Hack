@@ -16,149 +16,142 @@ async function lutchi(ctx) {
   const { sock, from, msg } = ctx;
 
   const caption =
-    "🤖 *LUTCHI ZAP HACK* 🤖\n" +
-    "〘 Bot de Grupos WhatsApp 〙\n\n" +
+    "╔═════════════════════════════════╗\n" +
+"║   🤖  *LUTCHI ZAP HACK*  🤖          ║\n" +
+"║      Bot de Grupos WhatsApp          ║\n" + "╚═════════════════════════════════╝\n\n" +
     "👑 *Dono:* " + config.owner.name + "\n" +
     "📸 *Instagram:* @" + config.owner.instagram + "\n" +
     "🇦🇴 *País:* Angola\n" +
     "🔖 *Versão:* v1.0.0\n" +
-    "⚡ *Prefixo:* " + p + "\n\n" +
+    "⚡ *Prefixo:* `" + p + "`\n\n" +
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
 
-    "─────────────────────\n" +
-    "📋 *INFORMAÇÕES*\n" +
-    "─────────────────────\n" +
-    p + "lutchi — Menu principal\n" +
-    p + "ping — Testar o bot\n" +
-    p + "info — Info do bot\n" +
-    p + "dono — Contato do dono\n" +
-    p + "sobre — Sobre o bot\n" +
-    p + "link — Link do grupo\n" +
-    p + "regras — Ver regras\n" +
-    p + "setregras — Definir regras\n\n" +
+    "╭──「 📋 *INFORMAÇÕES* 」\n" +
+    "│ " + p + "lutchi\n" +
+    "│ " + p + "menu\n" +
+    "│ " + p + "ping\n" +
+    "│ " + p + "info\n" +
+    "│ " + p + "dono\n" +
+    "│ " + p + "sobre\n" +
+    "│ " + p + "link\n" +
+    "│ " + p + "regras\n" +
+    "│ " + p + "setregras\n" +
+    "╰─────────────────\n\n" +
 
-    "─────────────────────\n" +
-    "👥 *MEMBROS* _(Admin)_\n" +
-    "─────────────────────\n" +
-    p + "ban — Banir membro\n" +
-    p + "kick — Expulsar membro\n" +
-    p + "add — Adicionar membro\n" +
-    p + "promover — Tornar admin\n" +
-    p + "rebaixar — Remover admin\n" +
-    p + "todos — Marcar todos\n" +
-    p + "clonar — Clonar grupo\n\n" +
+    "╭──「 👥 *MEMBROS* (Admin) 」\n" +
+    "│ " + p + "ban @membro\n" +
+    "│ " + p + "kick @membro\n" +
+    "│ " + p + "add 244XXXXXXXXX\n" +
+    "│ " + p + "promover @membro\n" +
+    "│ " + p + "rebaixar @membro\n" +
+    "│ " + p + "todos <mensagem>\n" +
+    "│ " + p + "clonar <link>\n" +
+    "╰──────────────────\n\n" +
 
-    "─────────────────────\n" +
-    "⚙️ *GRUPO* _(Admin)_\n" +
-    "─────────────────────\n" +
-    p + "fechar — Fechar grupo\n" +
-    p + "abrir — Abrir grupo\n" +
-    p + "nome — Mudar nome\n" +
-    p + "desc — Mudar descrição\n" +
-    p + "foto — Mudar foto\n" +
-    p + "revogar — Revogar link\n" +
-    p + "apagar — Apagar mensagem\n" +
-    p + "boasvindas — on/off\n\n" +
+    "╭──「 ⚙️ *GRUPO* (Admin) 」\n" +
+    "│ " + p + "fechar\n" +
+    "│ " + p + "abrir\n" +
+    "│ " + p + "nome <novo nome>\n" +
+    "│ " + p + "desc <descrição>\n" +
+    "│ " + p + "foto (responda imagem)\n" +
+    "│ " + p + "revogar\n" +
+    "│ " + p + "apagar\n" +
+    "│ " + p + "boasvindas on/off\n" +
+    "╰───────────────────\n\n" +
 
-    "─────────────────────\n" +
-    "🛡️ *MODERAÇÃO* _(Admin)_\n" +
-    "─────────────────────\n" +
-    p + "warn — Advertir membro\n" +
-    p + "warnings — Ver advertências\n" +
-    p + "resetwarn — Resetar warns\n" +
-    p + "mute — Mutar membro\n" +
-    p + "unmute — Desmutar membro\n" +
-    p + "antilink — on/off\n" +
-    p + "antiflood — on/off\n" +
-    p + "banword — Banir palavra\n" +
-    p + "delbanword — Remover palavra\n" +
-    p + "limparbanword — Limpar tudo\n\n" +
+    "╭──「 🛡️ *MODERAÇÃO* (Admin) 」\n" +
+    "│ " + p + "warn @membro\n" +
+    "│ " + p + "warnings @membro\n" +
+    "│ " + p + "resetwarn @membro\n" +
+    "│ " + p + "mute @membro <min>\n" +
+    "│ " + p + "unmute @membro\n" +
+    "│ " + p + "antilink on/off\n" +
+    "│ " + p + "antiflood on/off\n" +
+    "│ " + p + "banword <palavra>\n" +
+    "│ " + p + "delbanword <palavra>\n" +
+    "│ " + p + "limparbanword\n" +
+    "╰────────────────────\n\n" +
 
-    "─────────────────────\n" +
-    "🤖 *CONTROLE DO BOT* _(Dono)_\n" +
-    "─────────────────────\n" +
-    p + "ligarbot — Ligar bot\n" +
-    p + "desligarbot — Desligar bot\n" +
-    p + "modobot — todos/admins\n\n" +
+    "╭──「 🤖 *CONTROLE DO BOT* (Dono) 」\n" +
+    "│ " + p + "ligarbot\n" +
+    "│ " + p + "desligarbot\n" +
+    "│ " + p + "modobot todos/admins\n" +
+    "╰────────────────────\n\n" +
 
-    "─────────────────────\n" +
-    "🎙️ *DEBATE*\n" +
-    "─────────────────────\n" +
-    p + "debate — Iniciar debate\n" +
-    p + "favor — Votar a favor\n" +
-    p + "contra — Votar contra\n" +
-    p + "votos — Ver votos\n" +
-    p + "fimdebate — Encerrar\n\n" +
+    "╭──「 🎙️ *DEBATE* 」\n" +
+    "│ " + p + "debate <tema>\n" +
+    "│ " + p + "favor\n" +
+    "│ " + p + "contra\n" +
+    "│ " + p + "votos\n" +
+    "│ " + p + "fimdebate\n" +
+    "╰──────────────────\n\n" +
 
-    "─────────────────────\n" +
-    "📥 *DOWNLOADS*\n" +
-    "─────────────────────\n" +
-    p + "play — Baixar música\n" +
-    p + "playvid — Baixar vídeo\n" +
-    p + "youtube — Pesquisar YT\n" +
-    p + "tiktok — Baixar TikTok\n" +
-    p + "instagram — Baixar IG\n" +
-    p + "facebook — Baixar FB\n" +
-    p + "kwai — Baixar Kwai\n" +
-    p + "spotify — Baixar Spotify\n" +
-    p + "soundcloud — Baixar SC\n" +
-    p + "mediafire — Baixar MF\n" +
-    p + "tomp3 — Vídeo para MP3\n" +
-    p + "revelarft — Revelar foto\n\n" +
+    "╭──「 📥 *DOWNLOADS* 」\n" +
+    "│ " + p + "play <nome da música>\n" +
+    "│ " + p + "playvid <nome do vídeo>\n" +
+    "│ " + p + "youtube <pesquisa>\n" +
+    "│ " + p + "tiktok <link>\n" +
+    "│ " + p + "instagram <link>\n" +
+    "│ " + p + "facebook <link>\n" +
+    "│ " + p + "kwai <link>\n" +
+    "│ " + p + "spotify <link>\n" +
+    "│ " + p + "soundcloud <link>\n" +
+    "│ " + p + "mediafire <link>\n" +
+    "│ " + p + "tomp3 (responda vídeo)\n" +
+    "│ " + p + "revelarft (responda ft)\n" +
+    "╰──────────────────\n\n" +
 
-    "─────────────────────\n" +
-    "🎨 *STICKERS*\n" +
-    "─────────────────────\n" +
-    p + "sticker — Criar sticker\n" +
-    p + "toimg — Sticker para img\n" +
-    p + "togif — Sticker para gif\n" +
-    p + "attp — Texto animado\n" +
-    p + "ttp — Texto para sticker\n" +
-    p + "brat — Sticker brat\n" +
-    p + "emojimix — Misturar emojis\n" +
-    p + "stickerinfo — Info sticker\n" +
-    p + "gerarlink — Link da imagem\n\n" +
+    "╭──「 🎨 *STICKERS* 」\n" +
+    "│ " + p + "sticker (responda img/vid)\n" +
+    "│ " + p + "toimg (responda sticker)\n" +
+    "│ " + p + "togif (responda sticker)\n" +
+    "│ " + p + "attp <texto>\n" +
+    "│ " + p + "ttp <texto>\n" +
+    "│ " + p + "brat <texto>\n" +
+    "│ " + p + "emojimix 😀🔥\n" +
+    "│ " + p + "stickerinfo (responda)\n" +
+    "│ " + p + "gerarlink (responda img)\n" +
+    "╰──────────────────\n\n" +
 
-    "─────────────────────\n" +
-    "🔍 *PESQUISAS*\n" +
-    "─────────────────────\n" +
-    p + "wikipedia — Pesquisar Wiki\n" +
-    p + "traduzir — Traduzir texto\n" +
-    p + "clima — Ver clima\n" +
-    p + "dicionario — Ver definição\n" +
-    p + "noticias — Ver notícias\n" +
-    p + "movie — Info de filme\n" +
-    p + "serie — Info de série\n" +
-    p + "receita — Ver receita\n" +
-    p + "chatgpt — Perguntar IA\n" +
-    p + "signo — Ver signo\n" +
-    p + "obesidade — Calcular IMC\n" +
-    p + "flagpedia — Bandeira país\n" +
-    p + "tinyurl — Encurtar link\n" +
-    p + "googlesrc — Pesquisar Google\n" +
-    p + "gimage — Buscar imagem\n\n" +
+    "╭──「 🔍 *PESQUISAS* 」\n" +
+    "│ " + p + "wikipedia <assunto>\n" +
+    "│ " + p + "traduzir <lang> <texto>\n" +
+    "│ " + p + "clima <cidade>\n" +
+    "│ " + p + "dicionario <palavra>\n" +
+    "│ " + p + "noticias <tema>\n" +
+    "│ " + p + "movie <nome do filme>\n" +
+    "│ " + p + "serie <nome da série>\n" +
+    "│ " + p + "receita <prato>\n" +
+    "│ " + p + "chatgpt <pergunta>\n" +
+    "│ " + p + "signo <nome>\n" +
+    "│ " + p + "obesidade <peso> <altura>\n" +
+    "│ " + p + "flagpedia <país>\n" +
+    "│ " + p + "tinyurl <link>\n" +
+    "│ " + p + "googlesrc <pesquisa>\n" +
+    "│ " + p + "gimage <pesquisa>\n" +
+    "╰──────────────────\n\n" +
 
-    "─────────────────────\n" +
-    "🎮 *DIVERSÃO*\n" +
-    "─────────────────────\n" +
-    p + "dado — Lançar dado\n" +
-    p + "flip — Cara ou coroa\n" +
-    p + "sorteio — Sortear membro\n" +
-    p + "enquete — Criar enquete\n" +
-    p + "citar — Citar mensagem\n" +
-    p + "cantadas — Enviar cantada\n" +
-    p + "conselhos — Ver conselho\n" +
-    p + "conselhobiblico — Bíblia\n" +
-    p + "spoiler — Texto spoiler\n" +
-    p + "fazernick — Criar nick\n" +
-    p + "calcular — Calcular\n" +
-    p + "letramusica — Letra música\n" +
-    p + "perfil — Ver perfil\n" +
-    p + "tabela — Tabela do nick\n" +
-    p + "ddd — Consultar DDD\n\n" +
+    "╭──「 🎮 *DIVERSÃO* 」\n" +
+    "│ " + p + "dado <faces>\n" +
+    "│ " + p + "flip\n" +
+    "│ " + p + "sorteio\n" +
+    "│ " + p + "enquete P? | Op1 | Op2\n" +
+    "│ " + p + "citar (responda msg)\n" +
+    "│ " + p + "cantadas @membro\n" +
+    "│ " + p + "conselhos\n" +
+    "│ " + p + "conselhobiblico\n" +
+    "│ " + p + "spoiler <texto>\n" +
+    "│ " + p + "fazernick <nome>\n" +
+    "│ " + p + "calcular <expressão>\n" +
+    "│ " + p + "letramusica <nome>\n" +
+    "│ " + p + "perfil @membro\n" +
+    "│ " + p + "tabela <nick>\n" +
+    "│ " + p + "ddd <código>\n" +
+    "╰──────────────────\n\n" +
 
-    "─────────────────────\n" +
-    "🌐 github.com/luislutchii/Lutchi-Zap-Hack\n" +
-    "📸 @luislutchii | 🇦🇴 Angola | v1.0.0";
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+    "🌐 _github.com/luislutchii/Lutchi-Zap-Hack_\n" +
+    "📸 _@luislutchii_ | 🇦🇴 _Angola_ | 🤖 _v1.0.0_";
 
   const image = await getMenuImage();
   if (image) {
@@ -199,7 +192,7 @@ async function info(ctx) {
     "🔖 *Prefixo:* " + config.prefix + "\n" +
     "📚 *Biblioteca:* Baileys + yt-dlp\n" +
     "⏱️ *Uptime:* " + h + "h " + m + "m " + s + "s\n" +
-    "⚡ *Versão:* v1.0.0\n" +
+    "⚡ *Versão:* 1.0.0\n" +
     "🌍 *País:* Angola 🇦🇴\n" +
     "🌐 *GitHub:* github.com/luislutchii/Lutchi-Zap-Hack";
   if (image) {
@@ -271,8 +264,7 @@ async function sobre(ctx) {
   const image = await getMenuImage();
   const text =
     "🤖 *SOBRE O LUTCHI ZAP HACK*\n\n" +
-    "Bot completo de gerenciamento de grupos WhatsApp\n" +
-    "desenvolvido por *Luís Lutchi*.\n\n" +
+    "Bot completo de gerenciamento de grupos WhatsApp desenvolvido por *Luís Lutchi*.\n\n" +
     "🛡️ Moderação avançada\n" +
     "📥 Downloads (YouTube, TikTok, Instagram...)\n" +
     "🎨 Stickers e conversões\n" +
@@ -282,8 +274,8 @@ async function sobre(ctx) {
     "🔓 Revelar fotos únicas\n\n" +
     "📚 *Tecnologia:* Baileys + Node.js + yt-dlp\n" +
     "🌍 *Feito em Angola* 🇦🇴\n" +
-    "🌐 github.com/luislutchii/Lutchi-Zap-Hack\n" +
-    "📸 @" + config.owner.instagram;
+    "🌐 *GitHub:* github.com/luislutchii/Lutchi-Zap-Hack\n" +
+    "📸 *@" + config.owner.instagram + "*";
   if (image) {
     await sock.sendMessage(from, { image, caption: text }, { quoted: msg });
   } else {
