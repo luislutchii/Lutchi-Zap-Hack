@@ -54,7 +54,7 @@ async function play(ctx) {
     if (!video) return reply("❌ Música não encontrada!");
     await reply("🎵 *" + video.title + "*\n⏱️ " + (video.durationFormatted || "?") + "\n⬇️ Baixando...");
     const outFile = path.join(TEMP_DIR, "audio_" + Date.now() + ".mp3");
-    await runCmd('yt-dlp -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + video.url + '"', 90000);
+    await runCmd('yt-dlp --remote-components ejs:github -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + video.url + '"', 90000);
     const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("audio_") && (f.endsWith(".mp3") || f.endsWith(".m4a") || f.endsWith(".webm")));
     const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
     if (!file || !fs.existsSync(file)) return reply("❌ Erro ao baixar o áudio!");
@@ -77,7 +77,7 @@ async function playvid(ctx) {
     if (!video) return reply("❌ Vídeo não encontrado!");
     await reply("🎬 *" + video.title + "*\n⏱️ " + (video.durationFormatted || "?") + "\n⬇️ Baixando...");
     const outFile = path.join(TEMP_DIR, "video_" + Date.now() + ".mp4");
-    await runCmd('yt-dlp -f "bestvideo[height<=480]+bestaudio/best[height<=480]" --merge-output-format mp4 -o "' + outFile + '" "' + video.url + '"', 120000);
+    await runCmd('yt-dlp --remote-components ejs:github -f "bestvideo[height<=480]+bestaudio/best[height<=480]" --merge-output-format mp4 -o "' + outFile + '" "' + video.url + '"', 120000);
     if (!fs.existsSync(outFile)) return reply("❌ Erro ao baixar o vídeo!");
     const buffer = fs.readFileSync(outFile);
     fs.unlinkSync(outFile);
@@ -125,7 +125,7 @@ async function tiktok(ctx) {
 
     // Fallback: yt-dlp
     const outFile = path.join(TEMP_DIR, "tiktok_" + Date.now() + ".mp4");
-    await runCmd('yt-dlp -o "' + outFile + '" "' + url + '"', 60000);
+    await runCmd('yt-dlp --remote-components ejs:github -o "' + outFile + '" "' + url + '"', 60000);
     if (!fs.existsSync(outFile)) return reply("❌ Não foi possível baixar!");
     const buffer = fs.readFileSync(outFile);
     fs.unlinkSync(outFile);
@@ -141,7 +141,7 @@ async function instagram(ctx) {
   await reply("⏳ Baixando do Instagram...");
   try {
     const outFile = path.join(TEMP_DIR, "insta_" + Date.now() + ".mp4");
-    await runCmd('yt-dlp -o "' + outFile + '" "' + url + '"', 60000);
+    await runCmd('yt-dlp --remote-components ejs:github -o "' + outFile + '" "' + url + '"', 60000);
     if (!fs.existsSync(outFile)) return reply("❌ Não foi possível baixar! O perfil é público?");
     const buffer = fs.readFileSync(outFile);
     fs.unlinkSync(outFile);
@@ -162,7 +162,7 @@ async function facebook(ctx) {
   await reply("⏳ Baixando do Facebook...");
   try {
     const outFile = path.join(TEMP_DIR, "fb_" + Date.now() + ".mp4");
-    await runCmd('yt-dlp -o "' + outFile + '" "' + url + '"', 60000);
+    await runCmd('yt-dlp --remote-components ejs:github -o "' + outFile + '" "' + url + '"', 60000);
     if (!fs.existsSync(outFile)) return reply("❌ Não foi possível baixar!");
     const buffer = fs.readFileSync(outFile);
     fs.unlinkSync(outFile);
@@ -178,7 +178,7 @@ async function kwai(ctx) {
   await reply("⏳ Baixando do Kwai...");
   try {
     const outFile = path.join(TEMP_DIR, "kwai_" + Date.now() + ".mp4");
-    await runCmd('yt-dlp -o "' + outFile + '" "' + url + '"', 60000);
+    await runCmd('yt-dlp --remote-components ejs:github -o "' + outFile + '" "' + url + '"', 60000);
     if (!fs.existsSync(outFile)) return reply("❌ Não foi possível baixar!");
     const buffer = fs.readFileSync(outFile);
     fs.unlinkSync(outFile);
@@ -202,7 +202,7 @@ async function spotify(ctx) {
     const results = await YouTube.search(query, { limit: 1, type: "video" });
     if (!results[0]) return reply("❌ Não encontrei essa música!");
     const outFile = path.join(TEMP_DIR, "spotify_" + Date.now() + ".mp3");
-    await runCmd('yt-dlp -f bestaudio --extract-audio --audio-format mp3 -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + results[0].url + '"', 90000);
+    await runCmd('yt-dlp --remote-components ejs:github -f bestaudio --extract-audio --audio-format mp3 -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + results[0].url + '"', 90000);
     const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("spotify_"));
     const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
     if (!file) return reply("❌ Erro ao baixar!");
@@ -220,7 +220,7 @@ async function soundcloud(ctx) {
   await reply("⏳ Baixando do SoundCloud...");
   try {
     const outFile = path.join(TEMP_DIR, "sc_" + Date.now() + ".mp3");
-    await runCmd('yt-dlp -f bestaudio --extract-audio --audio-format mp3 -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + url + '"', 90000);
+    await runCmd('yt-dlp --remote-components ejs:github -f bestaudio --extract-audio --audio-format mp3 -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + url + '"', 90000);
     const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("sc_"));
     const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
     if (!file) return reply("❌ Não foi possível baixar!");
