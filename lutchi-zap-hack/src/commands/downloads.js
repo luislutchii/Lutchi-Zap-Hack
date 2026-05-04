@@ -1,13 +1,29 @@
-const axios = require("axios");
 const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
+const axios = require("axios");
+const { exec } = require("child_process");
+const YouTube = require("youtube-sr").default;
+const fs = require("fs");
+const path = require("path");
 const p = ".";
 
-async function dlBuffer(url) {
-  const res = await axios.get(url, {
-    responseType: "arraybuffer", timeout: 40000,
-    headers: { "User-Agent": "Mozilla/5.0" },
+const TEMP_DIR = path.join(__dirname, "../../data/temp");
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+
+function cleanTemp() {
+  try {
+    fs.readdirSync(TEMP_DIR).forEach(f => {
+      try { fs.unlinkSync(path.join(TEMP_DIR, f)); } catch (_) {}
+    });
+  } catch (_) {}
+}
+
+function runCmd(cmd, timeout = 60000) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { timeout, maxBuffer: 100 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) return reject(new Error(stderr || err.message));
+      resolve(stdout.trim());
+    });
   });
-  return Buffer.from(res.data);
 }
 
 async function dlFromMsg(mediaMsg, type) {
@@ -17,397 +33,304 @@ async function dlFromMsg(mediaMsg, type) {
   return buf;
 }
 
-async function tryApis(apis) {
-  for (const api of apis) {
-    try {
-      const res = await axios.get(api.url, {
-        timeout: api.timeout || 25000,
-        headers: { "User-Agent": "Mozilla/5.0" },
-      });
-      const url = api.extract(res.data);
-      if (url && typeof url === "string" && url.startsWith("http")) return url;
-    } catch (_) {}
-  }
-  return null;
+async function dlBuffer(url) {
+  const res = await axios.get(url, {
+    responseType: "arraybuffer",
+    timeout: 40000,
+    headers: { "User-Agent": "Mozilla/5.0" }
+  });
+  return Buffer.from(res.data);
 }
 
-// ── PLAY — YouTube MP3 ────────────────────────────────────────
+// ── PLAY (YouTube MP3 via yt-dlp) ────────────────────────────
 async function play(ctx) {
   const { args, reply, sock, from, msg } = ctx;
-  if (!args.length) return reply(`❌ Use: ${p}play Nome da música`);
+  if (!args.length) return reply("❌ Use: .play Nome da música");
   const query = args.join(" ");
-  await reply(`🔍 Procurando *${query}*...`);
+  await reply("🔍 Procurando *" + query + "*...");
   try {
-    // Pesquisa
-    const searchRes = await axios.get(
-      `https://api.agatz.xyz/api/ytsearch?message=${encodeURIComponent(query)}`,
-      { timeout: 15000 }
-    );
-    const video = searchRes.data?.data?.[0];
+    const results = await YouTube.search(query, { limit: 1, type: "video" });
+    const video = results[0];
     if (!video) return reply("❌ Música não encontrada!");
-    await reply(`🎵 *${video.title}*\n⏱️ ${video.duration || "N/A"}\n⬇️ Baixando...`);
-
-    // Download — tenta múltiplas APIs
-    const audioUrl = await tryApis([
-      {
-        url: `https://api.agatz.xyz/api/ytmp3?url=${encodeURIComponent(video.url)}`,
-        extract: (d) => d?.data?.url,
-      },
-      {
-        url: `https://shrutibots.site/download?url=${encodeURIComponent(video.url)}&type=audio`,
-        extract: (d) => d?.url || d?.link,
-      },
-      {
-        url: `https://musicapi.x007.workers.dev/search?q=${encodeURIComponent(query)}&searchEngine=gaama`,
-        extract: (d) => d?.data?.[0]?.url,
-      },
-    ]);
-
-    if (!audioUrl) return reply("❌ Não foi possível baixar! Tente outro nome.");
-    const buffer = await dlBuffer(audioUrl);
-    await sock.sendMessage(from, {
-      audio: buffer, mimetype: "audio/mpeg",
-      fileName: `${video.title}.mp3`,
-    }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
+    await reply("🎵 *" + video.title + "*\n⏱️ " + (video.durationFormatted || "?") + "\n⬇️ Baixando...");
+    const outFile = path.join(TEMP_DIR, "audio_" + Date.now() + ".mp3");
+    await runCmd('yt-dlp -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + video.url + '"', 90000);
+    const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("audio_") && (f.endsWith(".mp3") || f.endsWith(".m4a") || f.endsWith(".webm")));
+    const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+    if (!file || !fs.existsSync(file)) return reply("❌ Erro ao baixar o áudio!");
+    const buffer = fs.readFileSync(file);
+    fs.unlinkSync(file);
+    if (buffer.length < 1000) return reply("❌ Arquivo inválido!");
+    await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg", fileName: video.title + ".mp3" }, { quoted: msg });
+  } catch (e) { cleanTemp(); return reply("❌ Erro ao baixar: " + e.message.slice(0, 100)); }
 }
 
-// ── PLAYVID — YouTube MP4 ─────────────────────────────────────
+// ── PLAYVID (YouTube MP4 via yt-dlp) ─────────────────────────
 async function playvid(ctx) {
   const { args, reply, sock, from, msg } = ctx;
-  if (!args.length) return reply(`❌ Use: ${p}playvid Nome do vídeo`);
+  if (!args.length) return reply("❌ Use: .playvid Nome do vídeo");
   const query = args.join(" ");
-  await reply(`🔍 Procurando *${query}*...`);
+  await reply("🔍 Procurando *" + query + "*...");
   try {
-    const searchRes = await axios.get(
-      `https://api.agatz.xyz/api/ytsearch?message=${encodeURIComponent(query)}`,
-      { timeout: 15000 }
-    );
-    const video = searchRes.data?.data?.[0];
+    const results = await YouTube.search(query, { limit: 1, type: "video" });
+    const video = results[0];
     if (!video) return reply("❌ Vídeo não encontrado!");
-    await reply(`🎬 *${video.title}*\n⏱️ ${video.duration || "N/A"}\n⬇️ Baixando...`);
-
-    const videoUrl = await tryApis([
-      {
-        url: `https://api.agatz.xyz/api/ytmp4?url=${encodeURIComponent(video.url)}`,
-        extract: (d) => d?.data?.url,
-      },
-    ]);
-
-    if (!videoUrl) return reply("❌ Não foi possível baixar!");
-    const buffer = await dlBuffer(videoUrl);
-    await sock.sendMessage(from, {
-      video: buffer, mimetype: "video/mp4",
-      fileName: `${video.title}.mp4`,
-    }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
+    await reply("🎬 *" + video.title + "*\n⏱️ " + (video.durationFormatted || "?") + "\n⬇️ Baixando...");
+    const outFile = path.join(TEMP_DIR, "video_" + Date.now() + ".mp4");
+    await runCmd('yt-dlp -f "bestvideo[height<=480]+bestaudio/best[height<=480]" --merge-output-format mp4 -o "' + outFile + '" "' + video.url + '"', 120000);
+    if (!fs.existsSync(outFile)) return reply("❌ Erro ao baixar o vídeo!");
+    const buffer = fs.readFileSync(outFile);
+    fs.unlinkSync(outFile);
+    if (buffer.length < 1000) return reply("❌ Arquivo inválido!");
+    await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", fileName: video.title + ".mp4" }, { quoted: msg });
+  } catch (e) { cleanTemp(); return reply("❌ Erro ao baixar: " + e.message.slice(0, 100)); }
 }
 
-// ── YOUTUBE — Pesquisa ────────────────────────────────────────
+// ── YOUTUBE (busca) ───────────────────────────────────────────
 async function youtube(ctx) {
   const { args, reply } = ctx;
   const query = args.join(" ");
-  if (!query) return reply(`❌ Use: ${p}youtube Busca`);
-  await reply(`🔍 Buscando *${query}*...`);
+  if (!query) return reply("❌ Use: .youtube Busca");
+  await reply("🔍 Buscando *" + query + "*...");
   try {
-    const res = await axios.get(
-      `https://api.agatz.xyz/api/ytsearch?message=${encodeURIComponent(query)}`,
-      { timeout: 15000 }
-    );
-    const results = res.data?.data?.slice(0, 5);
+    const results = await YouTube.search(query, { limit: 5, type: "video" });
     if (!results?.length) return reply("❌ Nenhum resultado!");
-    const lista = results.map((v, i) =>
-      `${i + 1}. *${v.title}*\n⏱️ ${v.duration || "N/A"}\n🔗 ${v.url}`
-    ).join("\n\n");
-    return reply(`🎬 *YOUTUBE: ${query}*\n\n${lista}\n\n💡 Use *${p}play* ou *${p}playvid*!`);
+    const lista = results.map((v, i) => (i+1) + ". *" + v.title + "*\n⏱️ " + (v.durationFormatted||"?") + "\n🔗 " + v.url).join("\n\n");
+    return reply("🎬 *YOUTUBE: " + query + "*\n\n" + lista + "\n\n💡 Use *.play* para MP3 ou *.playvid* para MP4!");
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
-// ── TIKTOK — Sem marca d'água ─────────────────────────────────
+// ── TIKTOK ────────────────────────────────────────────────────
 async function tiktok(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const url = args[0];
-  if (!url) return reply(`❌ Use: ${p}tiktok <link>`);
+  if (!url) return reply("❌ Use: .tiktok <link do TikTok>");
   await reply("⏳ Baixando TikTok sem marca d'água...");
   try {
-    const videoUrl = await tryApis([
-      { url: `https://tikwm.com/api/?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.play },
-      { url: `https://api.agatz.xyz/api/tiktok?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.video || d?.data?.play },
-    ]);
-    if (!videoUrl) return reply("❌ Não foi possível baixar!");
-    const buffer = await dlBuffer(videoUrl);
-    await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", caption: "🎵 *Lutchi Zap Hack*" }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
-}
+    // Primeiro tentar via tikwm
+    try {
+      const r = await axios.post("https://www.tikwm.com/api/", "url=" + encodeURIComponent(url), {
+        timeout: 20000,
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0" }
+      });
+      const videoUrl = r.data?.data?.play || r.data?.data?.hdplay;
+      if (videoUrl) {
+        const buffer = await dlBuffer(videoUrl);
+        if (buffer.length > 1000) {
+          await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", caption: "🎵 *Lutchi Zap Hack*" }, { quoted: msg });
+          return;
+        }
+      }
+    } catch (_) {}
 
-// ── TIKTOK MP3 ────────────────────────────────────────────────
-async function tiktokmp3(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
-  const url = args[0];
-  if (!url) return reply(`❌ Use: ${p}tiktokmp3 <link>`);
-  await reply("⏳ Baixando áudio do TikTok...");
-  try {
-    const res = await axios.get(`https://tikwm.com/api/?url=${encodeURIComponent(url)}`, { timeout: 20000 });
-    const audioUrl = res.data?.data?.music;
-    if (!audioUrl) return reply("❌ Não foi possível baixar o áudio!");
-    const buffer = await dlBuffer(audioUrl);
-    await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg" }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
+    // Fallback: yt-dlp
+    const outFile = path.join(TEMP_DIR, "tiktok_" + Date.now() + ".mp4");
+    await runCmd('yt-dlp -o "' + outFile + '" "' + url + '"', 60000);
+    if (!fs.existsSync(outFile)) return reply("❌ Não foi possível baixar!");
+    const buffer = fs.readFileSync(outFile);
+    fs.unlinkSync(outFile);
+    await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", caption: "🎵 *Lutchi Zap Hack*" }, { quoted: msg });
+  } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
 // ── INSTAGRAM ─────────────────────────────────────────────────
 async function instagram(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const url = args[0];
-  if (!url) return reply(`❌ Use: ${p}instagram <link>`);
+  if (!url) return reply("❌ Use: .instagram <link do Instagram>");
   await reply("⏳ Baixando do Instagram...");
   try {
-    const mediaUrl = await tryApis([
-      { url: `https://api.agatz.xyz/api/instagram?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.[0]?.url || d?.data?.url },
-    ]);
-    if (!mediaUrl) return reply("❌ Não foi possível baixar! O link é público?");
-    const buffer  = await dlBuffer(mediaUrl);
-    const isVideo = mediaUrl.includes(".mp4");
-    await sock.sendMessage(from, { [isVideo ? "video" : "image"]: buffer, caption: "📸 *Lutchi Zap Hack*" }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
+    const outFile = path.join(TEMP_DIR, "insta_" + Date.now() + ".mp4");
+    await runCmd('yt-dlp -o "' + outFile + '" "' + url + '"', 60000);
+    if (!fs.existsSync(outFile)) return reply("❌ Não foi possível baixar! O perfil é público?");
+    const buffer = fs.readFileSync(outFile);
+    fs.unlinkSync(outFile);
+    const isVideo = buffer.length > 500000;
+    await sock.sendMessage(from, {
+      [isVideo ? "video" : "image"]: buffer,
+      mimetype: isVideo ? "video/mp4" : "image/jpeg",
+      caption: "📸 *Lutchi Zap Hack*"
+    }, { quoted: msg });
+  } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
 // ── FACEBOOK ──────────────────────────────────────────────────
 async function facebook(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const url = args[0];
-  if (!url) return reply(`❌ Use: ${p}facebook <link>`);
+  if (!url) return reply("❌ Use: .facebook <link do Facebook>");
   await reply("⏳ Baixando do Facebook...");
   try {
-    const videoUrl = await tryApis([
-      { url: `https://api.agatz.xyz/api/facebook?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.hd || d?.data?.sd || d?.data?.url },
-    ]);
-    if (!videoUrl) return reply("❌ Não foi possível baixar!");
-    const buffer = await dlBuffer(videoUrl);
+    const outFile = path.join(TEMP_DIR, "fb_" + Date.now() + ".mp4");
+    await runCmd('yt-dlp -o "' + outFile + '" "' + url + '"', 60000);
+    if (!fs.existsSync(outFile)) return reply("❌ Não foi possível baixar!");
+    const buffer = fs.readFileSync(outFile);
+    fs.unlinkSync(outFile);
     await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", caption: "📘 *Lutchi Zap Hack*" }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
-}
-
-// ── TWITTER ───────────────────────────────────────────────────
-async function twitter(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
-  const url = args[0];
-  if (!url) return reply(`❌ Use: ${p}twitter <link>`);
-  await reply("⏳ Baixando do Twitter/X...");
-  try {
-    const videoUrl = await tryApis([
-      { url: `https://api.agatz.xyz/api/twitter?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.url || d?.data?.video },
-    ]);
-    if (!videoUrl) return reply("❌ Não foi possível baixar!");
-    const buffer = await dlBuffer(videoUrl);
-    await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", caption: "🐦 *Lutchi Zap Hack*" }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
+  } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
 // ── KWAI ──────────────────────────────────────────────────────
 async function kwai(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const url = args[0];
-  if (!url) return reply(`❌ Use: ${p}kwai <link>`);
+  if (!url) return reply("❌ Use: .kwai <link do Kwai>");
   await reply("⏳ Baixando do Kwai...");
   try {
-    const videoUrl = await tryApis([
-      { url: `https://api.agatz.xyz/api/kwai?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.video },
-    ]);
-    if (!videoUrl) return reply("❌ Não foi possível baixar!");
-    const buffer = await dlBuffer(videoUrl);
+    const outFile = path.join(TEMP_DIR, "kwai_" + Date.now() + ".mp4");
+    await runCmd('yt-dlp -o "' + outFile + '" "' + url + '"', 60000);
+    if (!fs.existsSync(outFile)) return reply("❌ Não foi possível baixar!");
+    const buffer = fs.readFileSync(outFile);
+    fs.unlinkSync(outFile);
     await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", caption: "🎬 *Lutchi Zap Hack*" }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
+  } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
 // ── SPOTIFY ───────────────────────────────────────────────────
 async function spotify(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const url = args[0];
-  if (!url) return reply(`❌ Use: ${p}spotify <link do Spotify>`);
-  await reply("⏳ Baixando do Spotify...");
+  if (!url) return reply("❌ Use: .spotify <link do Spotify>");
+  await reply("⏳ Procurando música no Spotify...\n_Buscando no YouTube..._");
   try {
-    const audioUrl = await tryApis([
-      { url: `https://api.agatz.xyz/api/spotify?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.url },
-    ]);
-    if (!audioUrl) return reply("❌ Não foi possível baixar!");
-    const buffer = await dlBuffer(audioUrl);
-    await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg" }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
-}
-
-// ── SPOTIFY PESQUISA ──────────────────────────────────────────
-async function spotifysearch(ctx) {
-  const { args, reply } = ctx;
-  const query = args.join(" ");
-  if (!query) return reply(`❌ Use: ${p}spotifysearch Nome da música`);
-  await reply(`🔍 Pesquisando *${query}*...`);
-  try {
-    const res = await axios.get(
-      `https://api.agatz.xyz/api/spotifysearch?message=${encodeURIComponent(query)}`,
-      { timeout: 15000 }
-    );
-    const tracks = res.data?.data?.slice(0, 5);
-    if (!tracks?.length) return reply("❌ Nenhum resultado!");
-    const lista = tracks.map((t, i) =>
-      `${i + 1}. *${t.title || t.name}*\n👤 ${t.artists || "N/A"}`
-    ).join("\n\n");
-    return reply(`🎵 *SPOTIFY: ${query}*\n\n${lista}`);
-  } catch (e) { return reply("❌ Erro: " + e.message); }
+    // Extrair nome da música do link Spotify via odesli
+    const r = await axios.get("https://api.song.link/v1-alpha.1/links?url=" + encodeURIComponent(url), { timeout: 15000 });
+    const title = r.data?.entitiesByUniqueId?.[r.data?.entityUniqueId]?.title || "";
+    const artist = r.data?.entitiesByUniqueId?.[r.data?.entityUniqueId]?.artistName || "";
+    const query = (artist + " " + title).trim() || "música";
+    await reply("🎵 Encontrado: *" + title + "* - " + artist + "\n⬇️ Baixando...");
+    const results = await YouTube.search(query, { limit: 1, type: "video" });
+    if (!results[0]) return reply("❌ Não encontrei essa música!");
+    const outFile = path.join(TEMP_DIR, "spotify_" + Date.now() + ".mp3");
+    await runCmd('yt-dlp -f bestaudio --extract-audio --audio-format mp3 -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + results[0].url + '"', 90000);
+    const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("spotify_"));
+    const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+    if (!file) return reply("❌ Erro ao baixar!");
+    const buffer = fs.readFileSync(file);
+    fs.unlinkSync(file);
+    await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg", fileName: title + ".mp3" }, { quoted: msg });
+  } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
 // ── SOUNDCLOUD ────────────────────────────────────────────────
 async function soundcloud(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const url = args[0];
-  if (!url) return reply(`❌ Use: ${p}soundcloud <link>`);
+  if (!url) return reply("❌ Use: .soundcloud <link do SoundCloud>");
   await reply("⏳ Baixando do SoundCloud...");
   try {
-    const audioUrl = await tryApis([
-      { url: `https://api.agatz.xyz/api/soundcloud?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.url },
-    ]);
-    if (!audioUrl) return reply("❌ Não foi possível baixar!");
-    const buffer = await dlBuffer(audioUrl);
+    const outFile = path.join(TEMP_DIR, "sc_" + Date.now() + ".mp3");
+    await runCmd('yt-dlp -f bestaudio --extract-audio --audio-format mp3 -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + url + '"', 90000);
+    const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("sc_"));
+    const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+    if (!file) return reply("❌ Não foi possível baixar!");
+    const buffer = fs.readFileSync(file);
+    fs.unlinkSync(file);
     await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg" }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
+  } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
 // ── MEDIAFIRE ─────────────────────────────────────────────────
 async function mediafire(ctx) {
   const { args, reply } = ctx;
   const url = args[0];
-  if (!url) return reply(`❌ Use: ${p}mediafire <link>`);
-  await reply("⏳ Obtendo link...");
+  if (!url) return reply("❌ Use: .mediafire <link do Mediafire>");
+  await reply("⏳ Obtendo link direto...");
   try {
-    const res = await axios.get(`https://api.agatz.xyz/api/mediafire?url=${encodeURIComponent(url)}`, { timeout: 15000 });
-    const dlUrl = res.data?.data?.url || res.data?.data;
+    const r = await axios.get("https://api.agatz.xyz/api/mediafire?url=" + encodeURIComponent(url), { timeout: 15000 });
+    const dlUrl = r.data?.data?.url || r.data?.data;
     if (!dlUrl) return reply("❌ Não foi possível obter o link!");
-    return reply(`✅ *Link direto:*\n${dlUrl}`);
+    return reply("✅ *Link direto:*\n" + dlUrl);
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
-// ── PINTEREST ─────────────────────────────────────────────────
-async function pinterest(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
-  const url = args[0];
-  if (!url) return reply(`❌ Use: ${p}pinterest <link>`);
-  await reply("⏳ Baixando do Pinterest...");
-  try {
-    const mediaUrl = await tryApis([
-      { url: `https://api.agatz.xyz/api/pinterest?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.url || d?.data },
-    ]);
-    if (!mediaUrl) return reply("❌ Não foi possível baixar!");
-    const buffer  = await dlBuffer(mediaUrl);
-    const isVideo = mediaUrl.includes(".mp4");
-    await sock.sendMessage(from, { [isVideo ? "video" : "image"]: buffer, caption: "📌 *Lutchi Zap Hack*" }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
-}
-
-// ── TOMP3 — Vídeo para MP3 ───────────────────────────────────
+// ── TOMP3 ─────────────────────────────────────────────────────
 async function tomp3(ctx) {
   const { msg, reply, sock, from } = ctx;
-  const quoted   = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-  const videoMsg = msg.message?.videoMessage || quoted?.videoMessage;
-  if (!videoMsg) return reply(`❌ Responda um vídeo com *${p}tomp3*`);
-  await reply("⏳ Convertendo para MP3...");
+  const m = msg.message;
+  const q = m?.extendedTextMessage?.contextInfo?.quotedMessage;
+  const videoMsg = m?.videoMessage || q?.videoMessage;
+  if (!videoMsg) return reply("❌ Responda um vídeo com *.tomp3*");
+  await reply("⏳ Convertendo para áudio...");
   try {
     const buffer = await dlFromMsg(videoMsg, "video");
     await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg" }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
-// ── TTS — Texto para voz ──────────────────────────────────────
-async function tts(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
-  const texto = args.join(" ");
-  if (!texto) return reply(`❌ Use: ${p}tts Seu texto`);
-  await reply("🔊 Gerando áudio...");
-  try {
-    const res = await axios.get(
-      `https://api.agatz.xyz/api/tts?message=${encodeURIComponent(texto)}&lang=pt`,
-      { timeout: 20000 }
-    );
-    const audioUrl = res.data?.data?.url || res.data?.url;
-    if (!audioUrl) return reply("❌ Não foi possível gerar o áudio!");
-    const buffer = await dlBuffer(audioUrl);
-    await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg" }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
-}
-
-// ── REVELAR VISUALIZAÇÃO ÚNICA ────────────────────────────────
+// ── REVELARFT ─────────────────────────────────────────────────
 async function revelarft(ctx) {
   const { msg, reply, sock, from, isAdmin, isOwner } = ctx;
   if (!isAdmin && !isOwner) return reply("❌ Apenas administradores!");
   try {
-    const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
-    if (!contextInfo?.quotedMessage) return reply(`❌ Responda uma mensagem de visualização única!`);
-    const q = contextInfo.quotedMessage;
-    const viewOnceContent =
+    const q = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (!q) return reply("❌ Responda uma mensagem de visualização única com *.revelarft*");
+    const voMsg =
       q?.viewOnceMessage?.message ||
       q?.viewOnceMessageV2?.message ||
-      q?.viewOnceMessageV2Extension?.message ||
-      (q?.imageMessage?.viewOnce ? q : null) ||
-      (q?.videoMessage?.viewOnce ? q : null) || null;
-    const media = viewOnceContent?.imageMessage || viewOnceContent?.videoMessage || q?.imageMessage || q?.videoMessage || null;
-    if (!media) return reply(`❌ Não encontrei mídia de visualização única!`);
+      q?.viewOnceMessageV2Extension?.message;
+    const mediaMsg = voMsg?.imageMessage || voMsg?.videoMessage || voMsg?.audioMessage || q?.imageMessage || q?.videoMessage;
+    if (!mediaMsg) return reply("❌ Não encontrei mídia de visualização única!");
     await reply("🔓 Revelando...");
-    const isVideo = !!(viewOnceContent?.videoMessage || q?.videoMessage);
-    const type    = isVideo ? "video" : "image";
-    const buffer  = await dlFromMsg(media, type);
+    const isVideo = !!(voMsg?.videoMessage) || !!(mediaMsg?.seconds);
+    const isAudio = !!(voMsg?.audioMessage);
+    const type = isVideo ? "video" : isAudio ? "audio" : "image";
+    const buffer = await dlFromMsg(mediaMsg, type);
     await sock.sendMessage(from, {
       [type]: buffer,
-      mimetype: isVideo ? "video/mp4" : "image/jpeg",
-      caption: "🔓 *Revelado pelo Lutchi Zap Hack*",
+      mimetype: isVideo ? "video/mp4" : isAudio ? "audio/ogg; codecs=opus" : "image/jpeg",
+      caption: !isAudio ? "🔓 *Revelado pelo Lutchi Zap Hack*" : undefined,
     }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro: " + e.message); }
+  } catch (e) { return reply("❌ Erro ao revelar: " + e.message); }
 }
 
-// ── CLONAR GRUPO ─────────────────────────────────────────────
+// ── CLONAR ────────────────────────────────────────────────────
 async function clonar(ctx) {
   const { sock, from, args, reply, isAdmin, isOwner } = ctx;
   if (!isAdmin && !isOwner) return reply("❌ Apenas administradores!");
-  const linkOuId = args[0];
-  if (!linkOuId) return reply(`❌ Use: ${p}clonar <link do grupo>`);
-  await reply("⏳ Iniciando clonagem...");
+  const input = args[0];
+  if (!input) return reply("❌ Use: .clonar <link do grupo>\n\nEx: .clonar https://chat.whatsapp.com/XXXXX");
+  await reply("⏳ Obtendo informações do grupo...");
   try {
-    let groupId = linkOuId;
-    if (linkOuId.includes("chat.whatsapp.com/")) {
-      const code = linkOuId.split("chat.whatsapp.com/")[1].trim();
-      const info = await sock.groupGetInviteInfo(code).catch(() => null);
-      if (!info) return reply("❌ Link inválido ou expirado!");
-      groupId = info.id;
+    // Extrair código do link corretamente
+    let code = input.trim();
+    if (code.includes("chat.whatsapp.com/")) {
+      code = code.split("chat.whatsapp.com/")[1];
+      code = code.split("?")[0].split("/")[0].trim();
     }
-    const meta = await sock.groupMetadata(groupId).catch(() => null);
-    if (!meta) return reply("❌ Não consegui acessar esse grupo!");
-    const botNum  = (sock.user?.id ?? "").replace(/:.*@/, "@").replace(/@.*/, "");
-    const members = meta.participants.map((p) => p.id).filter((id) => !id.includes(botNum));
-    await reply(`📋 *${members.length} membros encontrados!*\n⏳ Adicionando...`);
+    console.log("Código extraído:", code);
+    const info = await sock.groupGetInviteInfo(code).catch((e) => {
+      console.log("groupGetInviteInfo erro:", e.message);
+      return null;
+    });
+    if (!info) return reply("❌ Link inválido ou expirado!\n\n💡 Certifique-se que:\n• O link está correto\n• O link não expirou\n• O bot está no grupo de origem");
+    await reply("📋 Grupo: *" + info.subject + "*\n👥 Membros: " + info.size + "\n⏳ Adicionando a cada 3s...");
+    let meta = await sock.groupMetadata(info.id).catch(() => null);
+    if (!meta) {
+      await sock.groupAcceptInvite(code).catch(() => {});
+      await new Promise(r => setTimeout(r, 3000));
+      meta = await sock.groupMetadata(info.id).catch(() => null);
+    }
+    if (!meta) return reply("❌ Não consegui acessar os membros.\n💡 O bot precisa estar no grupo de origem!");
+    const botNum = (sock.user?.id || "").split(":")[0].split("@")[0];
+    const members = meta.participants.map(p => p.id).filter(id => !id.includes(botNum));
     let adicionados = 0, falhos = 0;
     for (const jid of members) {
-      try { await sock.groupParticipantsUpdate(from, [jid], "add"); adicionados++; }
-      catch (_) { falhos++; }
-      await new Promise((r) => setTimeout(r, 3000));
+      try { await sock.groupParticipantsUpdate(from, [jid], "add"); adicionados++; } catch (_) { falhos++; }
+      await new Promise(r => setTimeout(r, 3000));
     }
-    return reply(`✅ *CLONAGEM CONCLUÍDA!*\n\n👥 Total: *${members.length}*\n✅ Adicionados: *${adicionados}*\n❌ Falhos: *${falhos}*`);
-  } catch (e) { return reply("❌ Erro: " + e.message); }
+    return reply("✅ *CLONAGEM CONCLUÍDA!*\n\n👥 Total: *" + members.length + "*\n✅ Adicionados: *" + adicionados + "*\n❌ Falhos: *" + falhos + "*");
+  } catch (e) { return reply("❌ Erro ao clonar: " + e.message); }
 }
 
-async function wallpaper(ctx) {
-  const { args, reply } = ctx;
-  const query = args.join(" ");
-  if (!query) return reply(`❌ Use: ${p}wallpaper Natureza`);
-  return reply(`🖼️ *Wallpaper: ${query}*\n\n🔗 https://unsplash.com/search/photos/${encodeURIComponent(query)}\n🔗 https://wallhaven.cc/search?q=${encodeURIComponent(query)}`);
-}
-
+// ── SHAZAM ────────────────────────────────────────────────────
 async function shazam(ctx) {
-  return ctx.reply(`⚠️ *Shazam* requer API Key gratuita do RapidAPI.\n\n🔗 https://rapidapi.com`);
+  const { msg, reply } = ctx;
+  const m = msg.message;
+  const q = m?.extendedTextMessage?.contextInfo?.quotedMessage;
+  const audioMsg = m?.audioMessage || q?.audioMessage;
+  if (!audioMsg) return reply("❌ Responda um áudio com *.shazam*");
+  return reply("⚠️ Configure sua API Key do Shazam (RapidAPI) para usar este comando.");
 }
 
-module.exports = {
-  play, playvid, youtube,
-  tiktok, tiktokmp3,
-  instagram, facebook, twitter, kwai,
-  spotify, spotifysearch, soundcloud,
-  mediafire, pinterest,
-  tomp3, tts, revelarft, clonar, wallpaper, shazam,
-};
+module.exports = { play, playvid, youtube, tiktok, instagram, facebook, kwai, spotify, soundcloud, mediafire, tomp3, revelarft, clonar, shazam };
