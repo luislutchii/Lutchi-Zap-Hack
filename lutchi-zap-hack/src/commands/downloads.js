@@ -2,12 +2,11 @@ const axios = require("axios");
 const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 const p = ".";
 
-const RAPID_KEY  = "03aab68c4amsh0ea821855a4a32ep1eb58fjsn513b28b951a3";
-const LOLHUMAN   = "1e132cf6200349754408d9f0";
-const LOLHUMAN_URL = "https://api.lolhuman.xyz/api";
-
 async function dlBuffer(url) {
-  const res = await axios.get(url, { responseType: "arraybuffer", timeout: 30000 });
+  const res = await axios.get(url, {
+    responseType: "arraybuffer", timeout: 40000,
+    headers: { "User-Agent": "Mozilla/5.0" },
+  });
   return Buffer.from(res.data);
 }
 
@@ -18,6 +17,20 @@ async function dlFromMsg(mediaMsg, type) {
   return buf;
 }
 
+async function tryApis(apis) {
+  for (const api of apis) {
+    try {
+      const res = await axios.get(api.url, {
+        timeout: api.timeout || 25000,
+        headers: { "User-Agent": "Mozilla/5.0" },
+      });
+      const url = api.extract(res.data);
+      if (url && typeof url === "string" && url.startsWith("http")) return url;
+    } catch (_) {}
+  }
+  return null;
+}
+
 // ── PLAY — YouTube MP3 ────────────────────────────────────────
 async function play(ctx) {
   const { args, reply, sock, from, msg } = ctx;
@@ -25,15 +38,37 @@ async function play(ctx) {
   const query = args.join(" ");
   await reply(`🔍 Procurando *${query}*...`);
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/ytsearch?apikey=${LOLHUMAN}&query=${encodeURIComponent(query)}`, { timeout: 15000 });
-    const video = res.data?.result?.[0];
+    // Pesquisa
+    const searchRes = await axios.get(
+      `https://api.agatz.xyz/api/ytsearch?message=${encodeURIComponent(query)}`,
+      { timeout: 15000 }
+    );
+    const video = searchRes.data?.data?.[0];
     if (!video) return reply("❌ Música não encontrada!");
-    await reply(`🎵 *${video.title}*\n⏱️ ${video.duration}\n⬇️ Baixando...`);
-    const dl = await axios.get(`${LOLHUMAN_URL}/ytmp3?apikey=${LOLHUMAN}&url=${encodeURIComponent(video.url)}`, { timeout: 40000 });
-    const audioUrl = dl.data?.result?.url;
-    if (!audioUrl) return reply("❌ Erro ao baixar!");
+    await reply(`🎵 *${video.title}*\n⏱️ ${video.duration || "N/A"}\n⬇️ Baixando...`);
+
+    // Download — tenta múltiplas APIs
+    const audioUrl = await tryApis([
+      {
+        url: `https://api.agatz.xyz/api/ytmp3?url=${encodeURIComponent(video.url)}`,
+        extract: (d) => d?.data?.url,
+      },
+      {
+        url: `https://shrutibots.site/download?url=${encodeURIComponent(video.url)}&type=audio`,
+        extract: (d) => d?.url || d?.link,
+      },
+      {
+        url: `https://musicapi.x007.workers.dev/search?q=${encodeURIComponent(query)}&searchEngine=gaama`,
+        extract: (d) => d?.data?.[0]?.url,
+      },
+    ]);
+
+    if (!audioUrl) return reply("❌ Não foi possível baixar! Tente outro nome.");
     const buffer = await dlBuffer(audioUrl);
-    await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg", fileName: `${video.title}.mp3` }, { quoted: msg });
+    await sock.sendMessage(from, {
+      audio: buffer, mimetype: "audio/mpeg",
+      fileName: `${video.title}.mp3`,
+    }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
@@ -44,15 +79,27 @@ async function playvid(ctx) {
   const query = args.join(" ");
   await reply(`🔍 Procurando *${query}*...`);
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/ytsearch?apikey=${LOLHUMAN}&query=${encodeURIComponent(query)}`, { timeout: 15000 });
-    const video = res.data?.result?.[0];
+    const searchRes = await axios.get(
+      `https://api.agatz.xyz/api/ytsearch?message=${encodeURIComponent(query)}`,
+      { timeout: 15000 }
+    );
+    const video = searchRes.data?.data?.[0];
     if (!video) return reply("❌ Vídeo não encontrado!");
-    await reply(`🎬 *${video.title}*\n⏱️ ${video.duration}\n⬇️ Baixando...`);
-    const dl = await axios.get(`${LOLHUMAN_URL}/ytmp4?apikey=${LOLHUMAN}&url=${encodeURIComponent(video.url)}`, { timeout: 40000 });
-    const videoUrl = dl.data?.result?.url;
-    if (!videoUrl) return reply("❌ Erro ao baixar!");
+    await reply(`🎬 *${video.title}*\n⏱️ ${video.duration || "N/A"}\n⬇️ Baixando...`);
+
+    const videoUrl = await tryApis([
+      {
+        url: `https://api.agatz.xyz/api/ytmp4?url=${encodeURIComponent(video.url)}`,
+        extract: (d) => d?.data?.url,
+      },
+    ]);
+
+    if (!videoUrl) return reply("❌ Não foi possível baixar!");
     const buffer = await dlBuffer(videoUrl);
-    await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", fileName: `${video.title}.mp4` }, { quoted: msg });
+    await sock.sendMessage(from, {
+      video: buffer, mimetype: "video/mp4",
+      fileName: `${video.title}.mp4`,
+    }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
@@ -63,13 +110,16 @@ async function youtube(ctx) {
   if (!query) return reply(`❌ Use: ${p}youtube Busca`);
   await reply(`🔍 Buscando *${query}*...`);
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/ytsearch?apikey=${LOLHUMAN}&query=${encodeURIComponent(query)}`, { timeout: 15000 });
-    const results = res.data?.result?.slice(0, 5);
+    const res = await axios.get(
+      `https://api.agatz.xyz/api/ytsearch?message=${encodeURIComponent(query)}`,
+      { timeout: 15000 }
+    );
+    const results = res.data?.data?.slice(0, 5);
     if (!results?.length) return reply("❌ Nenhum resultado!");
     const lista = results.map((v, i) =>
-      `${i + 1}. *${v.title}*\n⏱️ ${v.duration}\n🔗 ${v.url}`
+      `${i + 1}. *${v.title}*\n⏱️ ${v.duration || "N/A"}\n🔗 ${v.url}`
     ).join("\n\n");
-    return reply(`🎬 *YOUTUBE: ${query}*\n\n${lista}\n\n💡 Use *${p}play* ou *${p}playvid* para baixar!`);
+    return reply(`🎬 *YOUTUBE: ${query}*\n\n${lista}\n\n💡 Use *${p}play* ou *${p}playvid*!`);
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
@@ -80,8 +130,10 @@ async function tiktok(ctx) {
   if (!url) return reply(`❌ Use: ${p}tiktok <link>`);
   await reply("⏳ Baixando TikTok sem marca d'água...");
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/tiktokwm?apikey=${LOLHUMAN}&url=${encodeURIComponent(url)}`, { timeout: 25000 });
-    const videoUrl = res.data?.result?.video_nowm || res.data?.result?.video;
+    const videoUrl = await tryApis([
+      { url: `https://tikwm.com/api/?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.play },
+      { url: `https://api.agatz.xyz/api/tiktok?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.video || d?.data?.play },
+    ]);
     if (!videoUrl) return reply("❌ Não foi possível baixar!");
     const buffer = await dlBuffer(videoUrl);
     await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", caption: "🎵 *Lutchi Zap Hack*" }, { quoted: msg });
@@ -95,8 +147,8 @@ async function tiktokmp3(ctx) {
   if (!url) return reply(`❌ Use: ${p}tiktokmp3 <link>`);
   await reply("⏳ Baixando áudio do TikTok...");
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/tiktokmp3?apikey=${LOLHUMAN}&url=${encodeURIComponent(url)}`, { timeout: 25000 });
-    const audioUrl = res.data?.result?.music;
+    const res = await axios.get(`https://tikwm.com/api/?url=${encodeURIComponent(url)}`, { timeout: 20000 });
+    const audioUrl = res.data?.data?.music;
     if (!audioUrl) return reply("❌ Não foi possível baixar o áudio!");
     const buffer = await dlBuffer(audioUrl);
     await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg" }, { quoted: msg });
@@ -110,11 +162,11 @@ async function instagram(ctx) {
   if (!url) return reply(`❌ Use: ${p}instagram <link>`);
   await reply("⏳ Baixando do Instagram...");
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/instagram?apikey=${LOLHUMAN}&url=${encodeURIComponent(url)}`, { timeout: 25000 });
-    const media = res.data?.result;
-    if (!media) return reply("❌ Não foi possível baixar!");
-    const mediaUrl = Array.isArray(media) ? media[0] : media;
-    const buffer = await dlBuffer(mediaUrl);
+    const mediaUrl = await tryApis([
+      { url: `https://api.agatz.xyz/api/instagram?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.[0]?.url || d?.data?.url },
+    ]);
+    if (!mediaUrl) return reply("❌ Não foi possível baixar! O link é público?");
+    const buffer  = await dlBuffer(mediaUrl);
     const isVideo = mediaUrl.includes(".mp4");
     await sock.sendMessage(from, { [isVideo ? "video" : "image"]: buffer, caption: "📸 *Lutchi Zap Hack*" }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
@@ -127,8 +179,9 @@ async function facebook(ctx) {
   if (!url) return reply(`❌ Use: ${p}facebook <link>`);
   await reply("⏳ Baixando do Facebook...");
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/facebook?apikey=${LOLHUMAN}&url=${encodeURIComponent(url)}`, { timeout: 25000 });
-    const videoUrl = res.data?.result?.hd || res.data?.result?.sd;
+    const videoUrl = await tryApis([
+      { url: `https://api.agatz.xyz/api/facebook?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.hd || d?.data?.sd || d?.data?.url },
+    ]);
     if (!videoUrl) return reply("❌ Não foi possível baixar!");
     const buffer = await dlBuffer(videoUrl);
     await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", caption: "📘 *Lutchi Zap Hack*" }, { quoted: msg });
@@ -142,8 +195,9 @@ async function twitter(ctx) {
   if (!url) return reply(`❌ Use: ${p}twitter <link>`);
   await reply("⏳ Baixando do Twitter/X...");
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/twitter?apikey=${LOLHUMAN}&url=${encodeURIComponent(url)}`, { timeout: 25000 });
-    const videoUrl = res.data?.result?.url || res.data?.result;
+    const videoUrl = await tryApis([
+      { url: `https://api.agatz.xyz/api/twitter?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.url || d?.data?.video },
+    ]);
     if (!videoUrl) return reply("❌ Não foi possível baixar!");
     const buffer = await dlBuffer(videoUrl);
     await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", caption: "🐦 *Lutchi Zap Hack*" }, { quoted: msg });
@@ -157,8 +211,9 @@ async function kwai(ctx) {
   if (!url) return reply(`❌ Use: ${p}kwai <link>`);
   await reply("⏳ Baixando do Kwai...");
   try {
-    const res = await axios.get(`https://api.agatz.xyz/api/kwai?url=${encodeURIComponent(url)}`, { timeout: 25000 });
-    const videoUrl = res.data?.data?.video;
+    const videoUrl = await tryApis([
+      { url: `https://api.agatz.xyz/api/kwai?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.video },
+    ]);
     if (!videoUrl) return reply("❌ Não foi possível baixar!");
     const buffer = await dlBuffer(videoUrl);
     await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", caption: "🎬 *Lutchi Zap Hack*" }, { quoted: msg });
@@ -172,8 +227,9 @@ async function spotify(ctx) {
   if (!url) return reply(`❌ Use: ${p}spotify <link do Spotify>`);
   await reply("⏳ Baixando do Spotify...");
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/spotify?apikey=${LOLHUMAN}&url=${encodeURIComponent(url)}`, { timeout: 30000 });
-    const audioUrl = res.data?.result?.url;
+    const audioUrl = await tryApis([
+      { url: `https://api.agatz.xyz/api/spotify?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.url },
+    ]);
     if (!audioUrl) return reply("❌ Não foi possível baixar!");
     const buffer = await dlBuffer(audioUrl);
     await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg" }, { quoted: msg });
@@ -185,15 +241,18 @@ async function spotifysearch(ctx) {
   const { args, reply } = ctx;
   const query = args.join(" ");
   if (!query) return reply(`❌ Use: ${p}spotifysearch Nome da música`);
-  await reply(`🔍 Pesquisando *${query}* no Spotify...`);
+  await reply(`🔍 Pesquisando *${query}*...`);
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/spotifysearch?apikey=${LOLHUMAN}&query=${encodeURIComponent(query)}`, { timeout: 15000 });
-    const tracks = res.data?.result?.slice(0, 5);
+    const res = await axios.get(
+      `https://api.agatz.xyz/api/spotifysearch?message=${encodeURIComponent(query)}`,
+      { timeout: 15000 }
+    );
+    const tracks = res.data?.data?.slice(0, 5);
     if (!tracks?.length) return reply("❌ Nenhum resultado!");
     const lista = tracks.map((t, i) =>
-      `${i + 1}. *${t.name}*\n👤 ${t.artists}\n🔗 ${t.url}`
+      `${i + 1}. *${t.title || t.name}*\n👤 ${t.artists || "N/A"}`
     ).join("\n\n");
-    return reply(`🎵 *SPOTIFY: ${query}*\n\n${lista}\n\n💡 Use *${p}spotify <link>* para baixar!`);
+    return reply(`🎵 *SPOTIFY: ${query}*\n\n${lista}`);
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
@@ -204,8 +263,9 @@ async function soundcloud(ctx) {
   if (!url) return reply(`❌ Use: ${p}soundcloud <link>`);
   await reply("⏳ Baixando do SoundCloud...");
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/soundcloud?apikey=${LOLHUMAN}&url=${encodeURIComponent(url)}`, { timeout: 25000 });
-    const audioUrl = res.data?.result?.url;
+    const audioUrl = await tryApis([
+      { url: `https://api.agatz.xyz/api/soundcloud?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.url },
+    ]);
     if (!audioUrl) return reply("❌ Não foi possível baixar!");
     const buffer = await dlBuffer(audioUrl);
     await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg" }, { quoted: msg });
@@ -219,10 +279,10 @@ async function mediafire(ctx) {
   if (!url) return reply(`❌ Use: ${p}mediafire <link>`);
   await reply("⏳ Obtendo link...");
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/mediafire?apikey=${LOLHUMAN}&url=${encodeURIComponent(url)}`, { timeout: 15000 });
-    const dlUrl = res.data?.result;
+    const res = await axios.get(`https://api.agatz.xyz/api/mediafire?url=${encodeURIComponent(url)}`, { timeout: 15000 });
+    const dlUrl = res.data?.data?.url || res.data?.data;
     if (!dlUrl) return reply("❌ Não foi possível obter o link!");
-    return reply(`✅ *Link direto Mediafire:*\n${dlUrl}`);
+    return reply(`✅ *Link direto:*\n${dlUrl}`);
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
@@ -233,10 +293,11 @@ async function pinterest(ctx) {
   if (!url) return reply(`❌ Use: ${p}pinterest <link>`);
   await reply("⏳ Baixando do Pinterest...");
   try {
-    const res = await axios.get(`${LOLHUMAN_URL}/pinterest?apikey=${LOLHUMAN}&url=${encodeURIComponent(url)}`, { timeout: 25000 });
-    const mediaUrl = res.data?.result;
+    const mediaUrl = await tryApis([
+      { url: `https://api.agatz.xyz/api/pinterest?url=${encodeURIComponent(url)}`, extract: (d) => d?.data?.url || d?.data },
+    ]);
     if (!mediaUrl) return reply("❌ Não foi possível baixar!");
-    const buffer = await dlBuffer(mediaUrl);
+    const buffer  = await dlBuffer(mediaUrl);
     const isVideo = mediaUrl.includes(".mp4");
     await sock.sendMessage(from, { [isVideo ? "video" : "image"]: buffer, caption: "📌 *Lutchi Zap Hack*" }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
@@ -245,7 +306,7 @@ async function pinterest(ctx) {
 // ── TOMP3 — Vídeo para MP3 ───────────────────────────────────
 async function tomp3(ctx) {
   const { msg, reply, sock, from } = ctx;
-  const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+  const quoted   = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
   const videoMsg = msg.message?.videoMessage || quoted?.videoMessage;
   if (!videoMsg) return reply(`❌ Responda um vídeo com *${p}tomp3*`);
   await reply("⏳ Convertendo para MP3...");
@@ -255,51 +316,40 @@ async function tomp3(ctx) {
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
-// ── TEXT TO SPEECH ────────────────────────────────────────────
+// ── TTS — Texto para voz ──────────────────────────────────────
 async function tts(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const texto = args.join(" ");
-  if (!texto) return reply(`❌ Use: ${p}tts Seu texto aqui`);
+  if (!texto) return reply(`❌ Use: ${p}tts Seu texto`);
   await reply("🔊 Gerando áudio...");
   try {
-    const res = await axios.post(
-      "https://text-to-speech-neural-google.p.rapidapi.com/",
-      new URLSearchParams({ msg: texto, lang: "Vitoria", source: "ttsmp3" }),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "x-rapidapi-host": "text-to-speech-neural-google.p.rapidapi.com",
-          "x-rapidapi-key": RAPID_KEY,
-        },
-        timeout: 20000,
-      }
+    const res = await axios.get(
+      `https://api.agatz.xyz/api/tts?message=${encodeURIComponent(texto)}&lang=pt`,
+      { timeout: 20000 }
     );
-    const audioUrl = res.data?.URL;
+    const audioUrl = res.data?.data?.url || res.data?.url;
     if (!audioUrl) return reply("❌ Não foi possível gerar o áudio!");
     const buffer = await dlBuffer(audioUrl);
     await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg" }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro no TTS: " + e.message); }
+  } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
-// ── REVELAR FOTO/VÍDEO ÚNICA VISUALIZAÇÃO ────────────────────
+// ── REVELAR VISUALIZAÇÃO ÚNICA ────────────────────────────────
 async function revelarft(ctx) {
   const { msg, reply, sock, from, isAdmin, isOwner } = ctx;
   if (!isAdmin && !isOwner) return reply("❌ Apenas administradores!");
   try {
     const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
-    if (!contextInfo?.quotedMessage) return reply(`❌ Responda uma mensagem de visualização única com *${p}revelarft*`);
+    if (!contextInfo?.quotedMessage) return reply(`❌ Responda uma mensagem de visualização única!`);
     const q = contextInfo.quotedMessage;
     const viewOnceContent =
       q?.viewOnceMessage?.message ||
       q?.viewOnceMessageV2?.message ||
       q?.viewOnceMessageV2Extension?.message ||
       (q?.imageMessage?.viewOnce ? q : null) ||
-      (q?.videoMessage?.viewOnce ? q : null) ||
-      null;
-    const media =
-      viewOnceContent?.imageMessage || viewOnceContent?.videoMessage ||
-      q?.imageMessage || q?.videoMessage || null;
-    if (!media) return reply(`❌ Não encontrei mídia de visualização única!\n\nResponda directamente à foto/vídeo com *${p}revelarft*`);
+      (q?.videoMessage?.viewOnce ? q : null) || null;
+    const media = viewOnceContent?.imageMessage || viewOnceContent?.videoMessage || q?.imageMessage || q?.videoMessage || null;
+    if (!media) return reply(`❌ Não encontrei mídia de visualização única!`);
     await reply("🔓 Revelando...");
     const isVideo = !!(viewOnceContent?.videoMessage || q?.videoMessage);
     const type    = isVideo ? "video" : "image";
@@ -309,7 +359,7 @@ async function revelarft(ctx) {
       mimetype: isVideo ? "video/mp4" : "image/jpeg",
       caption: "🔓 *Revelado pelo Lutchi Zap Hack*",
     }, { quoted: msg });
-  } catch (e) { return reply("❌ Erro ao revelar: " + e.message); }
+  } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
 // ── CLONAR GRUPO ─────────────────────────────────────────────
@@ -342,13 +392,22 @@ async function clonar(ctx) {
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
+async function wallpaper(ctx) {
+  const { args, reply } = ctx;
+  const query = args.join(" ");
+  if (!query) return reply(`❌ Use: ${p}wallpaper Natureza`);
+  return reply(`🖼️ *Wallpaper: ${query}*\n\n🔗 https://unsplash.com/search/photos/${encodeURIComponent(query)}\n🔗 https://wallhaven.cc/search?q=${encodeURIComponent(query)}`);
+}
+
 async function shazam(ctx) {
-  return ctx.reply(`⚠️ *Shazam* requer API Key do RapidAPI.\n\nCadastre-se em: https://rapidapi.com\nPlano gratuito disponível!`);
+  return ctx.reply(`⚠️ *Shazam* requer API Key gratuita do RapidAPI.\n\n🔗 https://rapidapi.com`);
 }
 
 module.exports = {
-  play, playvid, youtube, tiktok, tiktokmp3,
+  play, playvid, youtube,
+  tiktok, tiktokmp3,
   instagram, facebook, twitter, kwai,
-  spotify, spotifysearch, soundcloud, mediafire, pinterest,
-  tomp3, tts, revelarft, clonar, shazam,
+  spotify, spotifysearch, soundcloud,
+  mediafire, pinterest,
+  tomp3, tts, revelarft, clonar, wallpaper, shazam,
 };
