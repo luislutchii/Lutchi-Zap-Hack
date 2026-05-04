@@ -111,9 +111,6 @@ async function messageHandler(sock, msg, store) {
     const sender  = isGroup ? msg.key.participant || msg.key.remoteJid : msg.key.remoteJid;
 
     const body = extractBody(msg);
-
-    console.log("📨 MSG:", JSON.stringify({ from, fromMe: msg.key.fromMe, body }));
-
     if (!body.startsWith(config.prefix)) {
       if (isGroup) await passiveModeration(sock, msg, from, sender, body, messageContent);
       return;
@@ -121,9 +118,6 @@ async function messageHandler(sock, msg, store) {
 
     const args    = body.slice(config.prefix.length).trim().split(/\s+/);
     const command = args.shift().toLowerCase();
-
-    console.log("⚡ Comando:", command, "| Args:", args);
-
     let groupMeta = null, isAdmin = false, isBotAdmin = false;
     if (isGroup) {
       groupMeta = await sock.groupMetadata(from).catch(() => null);
@@ -138,15 +132,8 @@ async function messageHandler(sock, msg, store) {
       }
     }
 
-    const isOwner = checkIsOwner(sender, groupMeta);
-
-    console.log("👤 isAdmin:", isAdmin, "| isOwner:", isOwner, "| isGroup:", isGroup);
-    console.log("🔍 sender:", sender, "| normalizado:", normalizeId(sender));
-
-    if (isGroup && !isAdmin && !isOwner) {
-      if (!PUBLIC_COMMANDS.has(command)) {
-        console.log("🚫 Bloqueado para membro normal:", command);
-        return;
+    const isOwner = checkIsOwner(sender, groupMeta);    if (isGroup && !isAdmin && !isOwner) {
+      if (!PUBLIC_COMMANDS.has(command)) {        return;
       }
     }
 
