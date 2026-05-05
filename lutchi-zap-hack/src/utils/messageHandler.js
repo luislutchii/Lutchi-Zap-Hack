@@ -9,6 +9,9 @@ const stickerCommands  = require("../commands/stickers");
 const pesquisaCommands = require("../commands/pesquisas");
 const brincadeiraCommands = require("../commands/brincadeiras");
 const ownerCommands    = require("../commands/owner");
+const extrasCommands      = require("../commands/extras");
+const debateCommands      = require("../commands/debate");
+const anuncioCommands     = require("../commands/anuncio");
 
 const floodTracker = {};
 
