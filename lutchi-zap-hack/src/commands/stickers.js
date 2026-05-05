@@ -47,77 +47,9 @@ function convertToWebP(inputBuffer, isVideo = false) {
   });
 }
 
-// ── Injeta EXIF no WebP sem libs externas ────────────────────
-function addExifToWebP(webpBuffer, packName, authorName) {
-  try {
-    const json = JSON.stringify({
-      "sticker-pack-id":        "com.lutchi.zaphack",
-      "sticker-pack-name":      packName,
-      "sticker-pack-publisher": authorName,
-      "emojis": ["🤖"],
-    });
-
-    const jsonBuf = Buffer.from(json, "utf8");
-
-    // EXIF header (TIFF little-endian + tag para UserComment)
-    const exifHeader = Buffer.from([
-      0x45, 0x78, 0x69, 0x66, 0x00, 0x00, // "Exif\0\0"
-      0x49, 0x49, 0x2A, 0x00,             // TIFF LE magic
-      0x08, 0x00, 0x00, 0x00,             // offset to IFD
-      0x01, 0x00,                          // 1 entry
-      0x10, 0x9C,                          // tag: UserComment (0x9C10 LE)
-      0x02, 0x00,                          // type: ASCII
-    ]);
-
-    const lenBuf = Buffer.alloc(4);
-    lenBuf.writeUInt32LE(jsonBuf.length, 0);
-
-    const offsetBuf = Buffer.from([0x1A, 0x00, 0x00, 0x00]); // offset após IFD
-    const nextIFD   = Buffer.from([0x00, 0x00, 0x00, 0x00]); // no next IFD
-
-    const exifData = Buffer.concat([exifHeader, lenBuf, offsetBuf, nextIFD, jsonBuf]);
-
-    // Constrói chunk EXIF para WebP
-    const chunkId   = Buffer.from("EXIF");
-    const chunkSize = Buffer.alloc(4);
-    chunkSize.writeUInt32LE(exifData.length, 0);
-    const exifChunk = Buffer.concat([chunkId, chunkSize, exifData]);
-
-    // Verifica se é WebP válido (RIFF....WEBP)
-    if (
-      webpBuffer.slice(0, 4).toString() !== "RIFF" ||
-      webpBuffer.slice(8, 12).toString() !== "WEBP"
-    ) {
-      return webpBuffer; // retorna original se não for WebP
-    }
-
-    // Actualiza o tamanho RIFF e insere chunk EXIF antes do fim
-    const riffSize = webpBuffer.readUInt32LE(4);
-    const newSize  = riffSize + exifChunk.length;
-    const newRiff  = Buffer.from(webpBuffer);
-    newRiff.writeUInt32LE(newSize, 4);
-
-    return Buffer.concat([newRiff, exifChunk]);
-  } catch (e) {
-    console.error("[EXIF]", e.message);
-    return webpBuffer;
-  }
-}
-
-// ── Lê EXIF do WebP ──────────────────────────────────────────
-function readExifFromWebP(buffer) {
-  try {
-    const str   = buffer.toString("binary");
-    const start = str.indexOf('{"sticker');
-    const end   = str.lastIndexOf("}");
-    if (start === -1 || end === -1) return null;
-    return JSON.parse(Buffer.from(str.slice(start, end + 1), "binary").toString("utf8"));
-  } catch { return null; }
-}
-
 async function sendSticker(sock, from, msg, buffer) {
-  const finalBuffer = addExifToWebP(buffer, STICKER_PACK, STICKER_AUTHOR);
-  await sock.sendMessage(from, { sticker: finalBuffer }, { quoted: msg });
+  // Envia sem modificar o buffer — sticker funciona, EXIF é cosmético
+  await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
 }
 
 async function sticker(ctx) {
@@ -300,11 +232,24 @@ async function stickerinfo(ctx) {
     const quoted     = m?.extendedTextMessage?.contextInfo?.quotedMessage;
     const stickerMsg = m?.stickerMessage || quoted?.stickerMessage;
     if (!stickerMsg) return reply("❌ Responda um sticker com *" + p + "stickerinfo*");
+
     const buffer = await downloadMedia(stickerMsg, "sticker");
-    const meta   = readExifFromWebP(buffer);
-    const pack   = meta?.["sticker-pack-name"]     || "Desconhecido";
-    const autor  = meta?.["sticker-pack-publisher"] || "Desconhecido";
-    const anim   = stickerMsg?.isAnimated ? "Sim ✅" : "Nao ❌";
+
+    // Tenta extrair JSON de metadados do binário do WebP
+    let pack  = "Desconhecido";
+    let autor = "Desconhecido";
+    try {
+      const str   = buffer.toString("latin1");
+      const start = str.indexOf('{"sticker-pack-name"');
+      if (start !== -1) {
+        const end  = str.indexOf("}", start) + 1;
+        const meta = JSON.parse(str.slice(start, end));
+        pack  = meta["sticker-pack-name"]     || pack;
+        autor = meta["sticker-pack-publisher"] || autor;
+      }
+    } catch (_) {}
+
+    const anim = stickerMsg?.isAnimated ? "Sim ✅" : "Nao ❌";
     return reply(
       "🎨 *INFO DO STICKER*\n\n" +
       "📦 *Pack:* " + pack + "\n" +
