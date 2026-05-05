@@ -1,6 +1,6 @@
 
 const config = require("../config/config");
-const { getAntiLink, getAntiFlood, getBanwords, isMuted, getAntiMentAdmin } = require("./database");
+const { getAntiLink, getAntiFlood, getBanwords, isMuted, getAntiMention } = require("./database");
 
 const infoCommands     = require("../commands/info");
 const adminCommands    = require("../commands/admin");
@@ -214,7 +214,7 @@ async function routeCommand(command, ctx) {
 async function passiveModeration(sock, msg, from, sender, body, messageContent) {
   try {
     // Anti-menção a admins
-    if (getAntiMentAdmin(from)) {
+    if (getAntiMention(from)) {
       const groupMeta = await sock.groupMetadata(from).catch(() => null);
       if (groupMeta) {
         const mentioned = messageContent?.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -285,8 +285,5 @@ module.exports = messageHandler;
 
 // Sobrescreve passiveModeration para incluir antiMention
 const _origHandler = module.exports;
-const { getAntiMention } = require("../utils/database");
 
 const _prevPassive = passiveModeration;
-// Patch: importar getAntiMention
-const { getAntiMention } = require("../utils/database");
