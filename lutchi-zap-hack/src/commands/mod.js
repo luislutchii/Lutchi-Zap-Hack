@@ -245,3 +245,52 @@ module.exports = {
   banword, delbanword, limparbanword,
   ligarbot, desligarbot, modobot, boasvindas,
 };
+
+// ── BOASVINDAS ────────────────────────────────────────────────
+async function boasvindas(ctx) {
+  const { args, reply, from } = ctx;
+  const { setAntiLink } = require("../utils/database");
+  const option = args[0]?.toLowerCase();
+  if (!option || !["on", "off"].includes(option)) {
+    return reply("❌ Use: .boasvindas on/off");
+  }
+  const db = require("../utils/database");
+  if (!db.setBoasvindas) return reply("🔧 Configure o banco de dados para suportar boasvindas.");
+  db.setBoasvindas(from, option === "on");
+  return reply("👋 *Boas-vindas " + (option === "on" ? "ativadas ✅" : "desativadas ❌") + "*\n" +
+    (option === "on" ? "_Novos membros serão saudados automaticamente!_" : "_Mensagens de boas-vindas desativadas._"));
+}
+
+// ── STATUSGRUPO (texto) ───────────────────────────────────────
+async function statusgrupo(ctx) {
+  const { sock, from, args, reply, isGroup, isBotAdmin } = ctx;
+  if (!isGroup) return reply("❌ Apenas em grupos!");
+  if (!isBotAdmin) return reply("❌ O bot precisa ser *admin* para alterar a descrição!");
+  const texto = args.join(" ");
+  if (!texto) return reply("❌ Use: .statusgrupo <texto da descrição>");
+  try {
+    await sock.groupUpdateDescription(from, texto);
+    return reply("✅ *Status do grupo atualizado!*\n\n📝 " + texto);
+  } catch (e) { return reply("❌ Erro: " + e.message); }
+}
+
+// ── FOTOSTATUS (foto do grupo) ────────────────────────────────
+async function fotostatus(ctx) {
+  const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
+  const { sock, from, msg, reply, isGroup, isBotAdmin } = ctx;
+  if (!isGroup) return reply("❌ Apenas em grupos!");
+  if (!isBotAdmin) return reply("❌ O bot precisa ser *admin* para alterar a foto!");
+  const m = msg.message;
+  const q = m?.extendedTextMessage?.contextInfo?.quotedMessage;
+  const imageMsg = m?.imageMessage || q?.imageMessage;
+  if (!imageMsg) return reply("❌ Envie ou responda uma imagem com *.fotostatus*");
+  try {
+    const stream = await downloadContentFromMessage(imageMsg, "image");
+    let buffer = Buffer.from([]);
+    for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
+    await sock.updateProfilePicture(from, buffer);
+    return reply("✅ *Foto do grupo atualizada com sucesso!*");
+  } catch (e) { return reply("❌ Erro: " + e.message); }
+}
+
+module.exports = Object.assign(module.exports, { boasvindas, statusgrupo, fotostatus });

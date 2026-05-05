@@ -17,8 +17,9 @@ async function lutchi(ctx) {
 
   const caption =
     "╔═════════════════════════════════╗\n" +
-"║   🤖  *LUTCHI ZAP HACK*  🤖          ║\n" +
-"║      Bot de Grupos WhatsApp          ║\n" + "╚═════════════════════════════════╝\n\n" +
+    "║   🤖  *LUTCHI ZAP HACK*  🤖    ║\n" +
+    "║      Bot de Grupos WhatsApp     ║\n" +
+    "╚═════════════════════════════════╝\n\n" +
     "👑 *Dono:* " + config.owner.name + "\n" +
     "📸 *Instagram:* @" + config.owner.instagram + "\n" +
     "🇦🇴 *País:* Angola\n" +
@@ -54,6 +55,8 @@ async function lutchi(ctx) {
     "│ " + p + "nome <novo nome>\n" +
     "│ " + p + "desc <descrição>\n" +
     "│ " + p + "foto (responda imagem)\n" +
+    "│ " + p + "statusgrupo <texto>\n" +
+    "│ " + p + "fotostatus (responda img)\n" +
     "│ " + p + "revogar\n" +
     "│ " + p + "apagar\n" +
     "│ " + p + "boasvindas on/off\n" +
@@ -80,10 +83,6 @@ async function lutchi(ctx) {
 
     "╭──「 🎙️ *DEBATE* 」\n" +
     "│ " + p + "debate <tema>\n" +
-    "│ " + p + "favor\n" +
-    "│ " + p + "contra\n" +
-    "│ " + p + "votos\n" +
-    "│ " + p + "fimdebate\n" +
     "╰──────────────────\n\n" +
 
     "╭──「 📥 *DOWNLOADS* 」\n" +
