@@ -116,6 +116,7 @@ async function messageHandler(sock, msg, store) {
 
 async function routeCommand(command, ctx) {
   const routes = {
+    anuncio:         () => anuncioCommands.anuncio(ctx),
     lutchi:          () => infoCommands.lutchi(ctx),
     menu:            () => infoCommands.menu(ctx),
     ping:            () => infoCommands.ping(ctx),

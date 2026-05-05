@@ -12,6 +12,7 @@ const path     = require("path");
 const axios    = require("axios");
 const config   = require("./config/config");
 const messageHandler = require("./utils/messageHandler");
+const { iniciarAnunciosTodos } = require("./commands/anuncio");
 const { loadDatabase, getRules, getBoasVindas } = require("./utils/database");
 
 global.bannedByBot = new Set();
