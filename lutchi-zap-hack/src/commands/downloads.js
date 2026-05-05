@@ -86,7 +86,8 @@ async function play(ctx) {
       videoTitle = info.title;
       videoDuration = info.duration;
     } else {
-      const out = await runCmd(`yt-dlp --dump-json --flat-playlist --playlist-end 1 "ytsearch1:${query}"`);
+      const safeQuery = query.replace(/"/g, "'");
+    const out = await runCmd(`yt-dlp --dump-json --flat-playlist --playlist-end 1 "ytsearch1:${safeQuery}"`);
       const result = JSON.parse(out.split("\n")[0]);
       if (!result?.id) return reply("❌ Música não encontrada!");
       videoTitle = result.title;
@@ -142,7 +143,8 @@ async function playvid(ctx) {
       videoTitle = info.title;
       videoDuration = info.duration;
     } else {
-      const out = await runCmd(`yt-dlp --dump-json --flat-playlist --playlist-end 1 "ytsearch1:${query} video"`);
+      const safeQuery = query.replace(/"/g, "'");
+    const out = await runCmd(`yt-dlp --dump-json --flat-playlist --playlist-end 1 "ytsearch1:${safeQuery} video"`);
       const result = JSON.parse(out.split("\n")[0]);
       if (!result?.id) return reply("❌ Vídeo não encontrado!");
       videoTitle = result.title;
@@ -181,7 +183,8 @@ async function youtube(ctx) {
   if (!query) return reply("❌ Use: .youtube <busca>");
   await reply("🔍 *Buscando...*");
   try {
-    const out = await runCmd(`yt-dlp --dump-json --flat-playlist --playlist-end 8 "ytsearch8:${query}"`);
+    const safeQuery = query.replace(/"/g, "'");
+    const out = await runCmd(`yt-dlp --dump-json --flat-playlist --playlist-end 8 "ytsearch8:${safeQuery}"`);
     const results = [];
     for (const line of out.split("\n")) {
       try {
