@@ -22,7 +22,6 @@ function getMentioned(msg, args) {
   return [];
 }
 
-// ── WARN ──────────────────────────────────────────────────────
 async function warn(ctx) {
   const { sock, from, msg, args, reply } = ctx;
   const mentioned = getMentioned(msg, args);
@@ -33,7 +32,7 @@ async function warn(ctx) {
     const max   = config.maxWarns;
     if (count >= max) {
       await sock.groupParticipantsUpdate(from, [jid], "remove");
-      await reply(`🔨 *@${num}* atingiu ${max} avisos e foi removido!`, { mentions: [jid] });
+      await reply(`🔨 @${num} atingiu ${max} avisos e foi removido!`, { mentions: [jid] });
     } else {
       await reply(
         `⚠️ *Aviso ${count}/${max}* para @${num}\n` +
@@ -45,7 +44,6 @@ async function warn(ctx) {
   }
 }
 
-// ── WARNINGS ──────────────────────────────────────────────────
 async function warnings(ctx) {
   const { from, msg, args, reply } = ctx;
   const mentioned = getMentioned(msg, args);
@@ -61,18 +59,16 @@ async function warnings(ctx) {
   }
 }
 
-// ── RESETWARN ─────────────────────────────────────────────────
 async function resetwarn(ctx) {
   const { from, msg, args, reply } = ctx;
   const mentioned = getMentioned(msg, args);
   if (!mentioned.length) return reply(`❌ Use: ${p}resetwarn @membro`);
   for (const jid of mentioned) {
     resetWarnings(from, jid);
-    await reply(`✅ Avisos de *@${jid.split("@")[0]}* foram zerados!`, { mentions: [jid] });
+    await reply(`✅ Avisos de *@${jid.split("@")[0]}* zerados!`, { mentions: [jid] });
   }
 }
 
-// ── MUTE ──────────────────────────────────────────────────────
 async function mute(ctx) {
   const { from, msg, args, reply } = ctx;
   const mentioned = getMentioned(msg, args);
@@ -84,59 +80,65 @@ async function mute(ctx) {
   for (const jid of mentioned) {
     muteMember(from, jid, minutes);
     await reply(
-      `🔇 *@${jid.split("@")[0]}* foi mutado por *${minutes} minuto(s)*!`,
+      `🔇 *@${jid.split("@")[0]}* mutado por *${minutes} minuto(s)*!`,
       { mentions: [jid] }
     );
   }
 }
 
-// ── UNMUTE ────────────────────────────────────────────────────
 async function unmute(ctx) {
   const { from, msg, args, reply } = ctx;
   const mentioned = getMentioned(msg, args);
   if (!mentioned.length) return reply(`❌ Use: ${p}unmute @membro`);
   for (const jid of mentioned) {
     unmuteMember(from, jid);
-    await reply(`🔊 *@${jid.split("@")[0]}* foi desmutado!`, { mentions: [jid] });
+    await reply(`🔊 *@${jid.split("@")[0]}* desmutado!`, { mentions: [jid] });
   }
 }
 
-// ── ANTILINK ──────────────────────────────────────────────────
 async function antilink(ctx) {
   const { from, args, reply } = ctx;
   const option = args[0]?.toLowerCase();
   if (!["on", "off"].includes(option)) {
     const status = getAntiLink(from);
-    return reply(`🔗 *Anti-Link:* ${status ? "✅ Ativado" : "❌ Desativado"}\n\nUse: *${p}antilink on/off*`);
+    return reply(
+      `🔗 *Anti-Link:* ${status ? "✅ Ativado" : "❌ Desativado"}\n\n` +
+      `Use: *${p}antilink on/off*`
+    );
   }
   setAntiLink(from, option === "on");
-  return reply(option === "on"
-    ? `🔗 *Anti-Link ativado!* ✅\n_Links serão removidos e o membro banido._`
-    : `🔗 *Anti-Link desativado!* ❌`
+  return reply(
+    option === "on"
+      ? `🔗 *Anti-Link ativado!* ✅\n_Links serão removidos e o membro banido._`
+      : `🔗 *Anti-Link desativado!* ❌`
   );
 }
 
-// ── ANTIFLOOD ─────────────────────────────────────────────────
 async function antiflood(ctx) {
   const { from, args, reply } = ctx;
   const option = args[0]?.toLowerCase();
   if (!["on", "off"].includes(option)) {
     const status = getAntiFlood(from);
-    return reply(`🌊 *Anti-Flood:* ${status ? "✅ Ativado" : "❌ Desativado"}\n\nUse: *${p}antiflood on/off*`);
+    return reply(
+      `🌊 *Anti-Flood:* ${status ? "✅ Ativado" : "❌ Desativado"}\n\n` +
+      `Use: *${p}antiflood on/off*`
+    );
   }
   setAntiFlood(from, option === "on");
-  return reply(option === "on"
-    ? `🌊 *Anti-Flood ativado!* ✅\n_Limite: ${config.floodLimit} msgs/5s_`
-    : `🌊 *Anti-Flood desativado!* ❌`
+  return reply(
+    option === "on"
+      ? `🌊 *Anti-Flood ativado!* ✅\n_Limite: ${config.floodLimit} msgs/5s_`
+      : `🌊 *Anti-Flood desativado!* ❌`
   );
 }
 
-// ── BANWORD — Adiciona palavra ────────────────────────────────
 async function banword(ctx) {
   const { from, args, reply } = ctx;
   if (!args.length) {
     const words = getBanwords(from);
-    if (!words.length) return reply("📝 Nenhuma palavra proibida.\nUse *${p}banword <palavra>* para adicionar.");
+    if (!words.length) return reply(
+      `📝 Nenhuma palavra proibida.\n\nUse *${p}banword <palavra>* para adicionar.`
+    );
     return reply(
       `🚫 *PALAVRAS PROIBIDAS*\n\n` +
       words.map((w, i) => `${i + 1}. \`${w}\``).join("\n") +
@@ -146,11 +148,10 @@ async function banword(ctx) {
   const word  = args[0].toLowerCase();
   const added = addBanword(from, word);
   return added
-    ? reply(`✅ Palavra *"${word}"* adicionada!\n_Mensagens com essa palavra serão apagadas._`)
+    ? reply(`✅ Palavra *"${word}"* adicionada!\n_Mensagens com esta palavra serão apagadas._`)
     : reply(`⚠️ A palavra *"${word}"* já está na lista!`);
 }
 
-// ── DELBANWORD — Remove palavra ───────────────────────────────
 async function delbanword(ctx) {
   const { from, args, reply } = ctx;
   if (!args.length) return reply(`❌ Use: ${p}delbanword <palavra>`);
@@ -158,48 +159,42 @@ async function delbanword(ctx) {
   const removed = removeBanword(from, word);
   return removed
     ? reply(`✅ Palavra *"${word}"* removida da lista!`)
-    : reply(`❌ A palavra *"${word}"* não está na lista!`);
+    : reply(`❌ A palavra *"${word}"* não está na lista!\n\nUse *${p}banword* para ver a lista.`);
 }
 
-// ── LIMPARBANWORD — Limpa todas as palavras ───────────────────
 async function limparbanword(ctx) {
   const { from, reply } = ctx;
   clearBanwords(from);
   return reply("✅ *Lista de palavras proibidas limpa!*");
 }
 
-// ── LIGARBOT — Liga o bot no grupo ───────────────────────────
 async function ligarbot(ctx) {
   const { from, reply, isOwner } = ctx;
   if (!isOwner) return reply("🔒 Apenas o *dono do bot* pode usar este comando!");
   setBotStatus(from, true);
   return reply(
-    `✅ *Bot ligado neste grupo!*\n\n` +
+    `✅ *Bot ligado!*\n\n` +
     `🤖 O bot voltará a responder normalmente.\n\n` +
     `_🤖 Lutchi Zap Hack_`
   );
 }
 
-// ── DESLIGARBOT — Desliga o bot no grupo ─────────────────────
 async function desligarbot(ctx) {
   const { from, reply, isOwner } = ctx;
   if (!isOwner) return reply("🔒 Apenas o *dono do bot* pode usar este comando!");
   setBotStatus(from, false);
   return reply(
-    `❌ *Bot desligado neste grupo!*\n\n` +
-    `🤖 O bot não responderá mais até ser religado.\n` +
-    `Use *${p}ligarbot* para ligar novamente.\n\n` +
+    `❌ *Bot desligado!*\n\n` +
+    `🤖 O bot não responderá até ser religado.\n` +
+    `Use *${p}ligarbot* para religar.\n\n` +
     `_🤖 Lutchi Zap Hack_`
   );
 }
 
-// ── MODOBOT — Define quem pode usar o bot ────────────────────
 async function modobot(ctx) {
   const { from, args, reply, isOwner, isAdmin } = ctx;
   if (!isOwner && !isAdmin) return reply("🔒 Apenas *admins* ou o *dono* podem usar este comando!");
-
   const modo = args[0]?.toLowerCase();
-
   if (!["todos", "admins"].includes(modo)) {
     const atual = getModoBot(from);
     return reply(
@@ -210,31 +205,32 @@ async function modobot(ctx) {
       `• *${p}modobot admins* — apenas admins usam o bot`
     );
   }
-
   setModoBot(from, modo);
   return reply(
     modo === "todos"
-      ? `✅ *Modo: Todos os membros*\n_Membros podem usar comandos públicos do bot._`
+      ? `✅ *Modo: Todos os membros*\n_Membros podem usar comandos públicos._`
       : `✅ *Modo: Apenas admins*\n_Apenas administradores podem usar o bot._`
   );
 }
 
-// ── BOASVINDAS — Ativa/desativa boas-vindas ──────────────────
 async function boasvindas(ctx) {
-  const { from, args, reply } = ctx;
+  const { from, args, reply, isGroup } = ctx;
+  if (!isGroup) return reply("❌ Apenas em grupos!");
   const option = args[0]?.toLowerCase();
   if (!["on", "off"].includes(option)) {
     const status = getBoasVindas(from);
     return reply(
       `👋 *Boas-Vindas:* ${status ? "✅ Ativado" : "❌ Desativado"}\n\n` +
-      `Use: *${p}boasvindas on/off*`
+      `Use: *${p}boasvindas on/off*\n\n` +
+      `_Quando ativado, novos membros recebem\n` +
+      `mensagem de boas-vindas com a foto de perfil._`
     );
   }
   setBoasVindas(from, option === "on");
   return reply(
     option === "on"
-      ? `👋 *Boas-Vindas ativado!* ✅\n_Novos membros receberão mensagem de boas-vindas._`
-      : `👋 *Boas-Vindas desativado!* ❌\n_Nenhuma mensagem será enviada para novos membros._`
+      ? `👋 *Boas-Vindas ativado!* ✅\n_Novos membros serão saudados automaticamente._`
+      : `👋 *Boas-Vindas desativado!* ❌\n_Nenhuma mensagem de entrada será enviada._`
   );
 }
 
@@ -245,52 +241,3 @@ module.exports = {
   banword, delbanword, limparbanword,
   ligarbot, desligarbot, modobot, boasvindas,
 };
-
-// ── BOASVINDAS ────────────────────────────────────────────────
-async function boasvindas(ctx) {
-  const { args, reply, from } = ctx;
-  const { setAntiLink } = require("../utils/database");
-  const option = args[0]?.toLowerCase();
-  if (!option || !["on", "off"].includes(option)) {
-    return reply("❌ Use: .boasvindas on/off");
-  }
-  const db = require("../utils/database");
-  if (!db.setBoasvindas) return reply("🔧 Configure o banco de dados para suportar boasvindas.");
-  db.setBoasvindas(from, option === "on");
-  return reply("👋 *Boas-vindas " + (option === "on" ? "ativadas ✅" : "desativadas ❌") + "*\n" +
-    (option === "on" ? "_Novos membros serão saudados automaticamente!_" : "_Mensagens de boas-vindas desativadas._"));
-}
-
-// ── STATUSGRUPO (texto) ───────────────────────────────────────
-async function statusgrupo(ctx) {
-  const { sock, from, args, reply, isGroup, isBotAdmin } = ctx;
-  if (!isGroup) return reply("❌ Apenas em grupos!");
-  if (!isBotAdmin) return reply("❌ O bot precisa ser *admin* para alterar a descrição!");
-  const texto = args.join(" ");
-  if (!texto) return reply("❌ Use: .statusgrupo <texto da descrição>");
-  try {
-    await sock.groupUpdateDescription(from, texto);
-    return reply("✅ *Status do grupo atualizado!*\n\n📝 " + texto);
-  } catch (e) { return reply("❌ Erro: " + e.message); }
-}
-
-// ── FOTOSTATUS (foto do grupo) ────────────────────────────────
-async function fotostatus(ctx) {
-  const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
-  const { sock, from, msg, reply, isGroup, isBotAdmin } = ctx;
-  if (!isGroup) return reply("❌ Apenas em grupos!");
-  if (!isBotAdmin) return reply("❌ O bot precisa ser *admin* para alterar a foto!");
-  const m = msg.message;
-  const q = m?.extendedTextMessage?.contextInfo?.quotedMessage;
-  const imageMsg = m?.imageMessage || q?.imageMessage;
-  if (!imageMsg) return reply("❌ Envie ou responda uma imagem com *.fotostatus*");
-  try {
-    const stream = await downloadContentFromMessage(imageMsg, "image");
-    let buffer = Buffer.from([]);
-    for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-    await sock.updateProfilePicture(from, buffer);
-    return reply("✅ *Foto do grupo atualizada com sucesso!*");
-  } catch (e) { return reply("❌ Erro: " + e.message); }
-}
-
-module.exports = Object.assign(module.exports, { boasvindas, statusgrupo, fotostatus });
