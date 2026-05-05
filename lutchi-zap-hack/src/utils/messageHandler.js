@@ -125,7 +125,7 @@ async function routeCommand(command, ctx) {
     link:            () => infoCommands.link(ctx),
     regras:          () => infoCommands.regras(ctx),
     setregras:       () => infoCommands.setregras(ctx),
-    sticker:         () => infoCommands.sticker(ctx),
+    sticker:         () => stickerCommands.sticker(ctx),
     dono:            () => infoCommands.dono(ctx),
     sobre:           () => infoCommands.sobre(ctx),
     ban:             () => adminCommands.ban(ctx),
