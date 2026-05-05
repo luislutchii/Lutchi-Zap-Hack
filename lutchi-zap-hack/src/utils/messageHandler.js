@@ -144,6 +144,11 @@ async function messageHandler(sock, msg, store) {
         sock.sendMessage(from, { text, ...opts }, { quoted: msg }),
     };
 
+    // Reage à mensagem para indicar que o bot recebeu
+    await sock.sendMessage(from, {
+      react: { text: "⏳", key: msg.key },
+    }).catch(() => {});
+
     await routeCommand(command, ctx);
   } catch (err) {
     console.error("❌ Erro no handler:", err.message, err.stack);
@@ -382,3 +387,4 @@ async function passiveModeration(sock, msg, from, sender, body, messageContent) 
 }
 
 module.exports = messageHandler;
+// Linha extra — não precisa de adicionar nada aqui
