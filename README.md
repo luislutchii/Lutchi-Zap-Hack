@@ -142,29 +142,6 @@ npm start
 
 ---
 
-⚙️ Configuração
-
-Edite o arquivo src/config/config.js para personalizar o bot:
-
-```js
-module.exports = {
-  botName: "Lutchi Zap Hack",
-  prefix: ".",            // Prefixo dos comandos
-  menuPrefix: ".lutchi",  // Comando do menu
-  owner: {
-    name: "Luís Lutchi",
-    number: "244924319522", // Número com código do país (sem +)
-    instagram: "luislutchii",
-  },
-  maxWarns: 3,   // Advertências antes do ban
-  floodLimit: 5, // Limite anti-flood (msgs/5s)
-  antiLink: true,  // Anti-link ativado por padrão
-  welcome: true,   // Mensagem de boas-vindas ativada
-};
-```
-
----
-
 📋 Comandos
 
 📋 Menu & Info
