@@ -1,7 +1,4 @@
-const axios   = require("axios");
-const ffmpeg  = require("fluent-ffmpeg");
-const fs      = require("fs");
-const os      = require("os");
+const axios  = require("axios");
 const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 const p = ".";
 
@@ -12,44 +9,12 @@ async function downloadMedia(mediaMsg, type) {
   return Buffer.concat(chunks);
 }
 
-function getMimeExt(mimetype = "") {
-  if (mimetype.includes("png"))  return "png";
-  if (mimetype.includes("webp")) return "webp";
-  if (mimetype.includes("gif"))  return "gif";
-  if (mimetype.includes("mp4"))  return "mp4";
-  if (mimetype.includes("video")) return "mp4";
-  return "jpg";
-}
-
-function convertToWebP(inputBuffer, ext = "jpg") {
-  return new Promise((resolve, reject) => {
-    const tmpIn  = os.homedir() + "/stk_in_" + Date.now() + "." + ext;
-    const tmpOut = os.homedir() + "/stk_out_" + Date.now() + ".webp";
-    fs.writeFileSync(tmpIn, inputBuffer);
-    ffmpeg(tmpIn)
-      .outputOptions([
-        "-vf", "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
-        "-vcodec", "libwebp",
-        "-loop", ext === "mp4" ? "0" : "1",
-        "-preset", "icon",
-        "-an", "-vsync", "0",
-        "-t", "00:00:05",
-      ])
-      .toFormat("webp")
-      .save(tmpOut)
-      .on("end", () => {
-        const buf = fs.readFileSync(tmpOut);
-        try { fs.unlinkSync(tmpIn); } catch (_) {}
-        try { fs.unlinkSync(tmpOut); } catch (_) {}
-        console.log("[STICKER] WebP gerado:", buf.length, "bytes");
-        resolve(buf);
-      })
-      .on("error", (err) => {
-        try { fs.unlinkSync(tmpIn); } catch (_) {}
-        try { fs.unlinkSync(tmpOut); } catch (_) {}
-        reject(err);
-      });
+async function downloadUrl(url) {
+  const res = await axios.get(url, {
+    responseType: "arraybuffer", timeout: 20000,
+    headers: { "User-Agent": "Mozilla/5.0" },
   });
+  return Buffer.from(res.data);
 }
 
 async function sticker(ctx) {
@@ -57,38 +22,31 @@ async function sticker(ctx) {
   try {
     const m      = msg.message;
     const quoted = m?.extendedTextMessage?.contextInfo?.quotedMessage;
-    const imgMsg = m?.imageMessage || quoted?.imageMessage || null;
-    const vidMsg = m?.videoMessage || quoted?.videoMessage || null;
+    const imgMsg = m?.imageMessage  || quoted?.imageMessage  || null;
+    const vidMsg = m?.videoMessage  || quoted?.videoMessage  || null;
     const media  = imgMsg || vidMsg;
 
     if (!media) return reply(
-      "❌ *Nenhuma imagem detectada!*\n\n" +
-      "📌 Como usar:\n" +
-      "> Envie a imagem com *" + p + "sticker* na legenda\n" +
-      "> OU responda uma imagem com *" + p + "sticker*"
+      `❌ *Nenhuma imagem detectada!*\n\n` +
+      `📌 Como usar:\n` +
+      `› Envie a imagem com *${p}sticker* na legenda\n` +
+      `› OU responda uma imagem com *${p}sticker*`
     );
 
     await reply("⏳ Criando sticker...");
 
-    const isVideo = !!(vidMsg && !imgMsg);
-    const mime    = (isVideo ? vidMsg?.mimetype : imgMsg?.mimetype) || "";
-    const ext     = getMimeExt(mime);
+    const type   = vidMsg && !imgMsg ? "video" : "image";
+    const buffer = await downloadMedia(media, type);
 
-    console.log("[STICKER] mime:", mime, "ext:", ext);
+    if (!buffer || buffer.length < 100)
+      return reply("❌ Não foi possível baixar a mídia!");
 
-    const buffer = await downloadMedia(media, isVideo ? "video" : "image");
-    console.log("[STICKER] buffer baixado:", buffer.length, "bytes");
+    await sock.sendMessage(from, {
+      sticker: buffer,
+      mimetype: type === "video" ? "video/webp" : "image/webp",
+    }, { quoted: msg });
 
-    if (!buffer || buffer.length < 100) return reply("❌ Nao foi possivel baixar a midia!");
-
-    const webp = await convertToWebP(buffer, ext);
-    if (!webp || webp.length < 100) return reply("❌ Conversao falhou!");
-
-    await sock.sendMessage(from, { sticker: webp }, { quoted: msg });
-  } catch (e) {
-    console.error("[STICKER ERROR]", e.message);
-    return reply("❌ Erro: " + e.message);
-  }
+  } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
 async function toimg(ctx) {
@@ -97,28 +55,11 @@ async function toimg(ctx) {
     const m          = msg.message;
     const quoted     = m?.extendedTextMessage?.contextInfo?.quotedMessage;
     const stickerMsg = m?.stickerMessage || quoted?.stickerMessage;
-    if (!stickerMsg) return reply("❌ Responda um *sticker* com *" + p + "toimg*");
+    if (!stickerMsg) return reply(`❌ Responda um *sticker* com *${p}toimg*`);
     await reply("⏳ Convertendo...");
     const buffer = await downloadMedia(stickerMsg, "sticker");
-    if (!buffer || buffer.length < 100) return reply("❌ Nao foi possivel converter!");
-    const tmpIn  = os.homedir() + "/toimg_in_" + Date.now() + ".webp";
-    const tmpOut = os.homedir() + "/toimg_out_" + Date.now() + ".png";
-    fs.writeFileSync(tmpIn, buffer);
-    const png = await new Promise((resolve, reject) => {
-      ffmpeg(tmpIn).toFormat("png").save(tmpOut)
-        .on("end", () => {
-          const buf = fs.readFileSync(tmpOut);
-          try { fs.unlinkSync(tmpIn); } catch (_) {}
-          try { fs.unlinkSync(tmpOut); } catch (_) {}
-          resolve(buf);
-        })
-        .on("error", (e) => {
-          try { fs.unlinkSync(tmpIn); } catch (_) {}
-          try { fs.unlinkSync(tmpOut); } catch (_) {}
-          reject(e);
-        });
-    });
-    await sock.sendMessage(from, { image: png, caption: "🖼️ *Lutchi Zap Hack*" }, { quoted: msg });
+    if (!buffer || buffer.length < 100) return reply("❌ Não foi possível converter!");
+    await sock.sendMessage(from, { image: buffer, caption: "🖼️ *Lutchi Zap Hack*" }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
@@ -128,10 +69,10 @@ async function togif(ctx) {
     const m          = msg.message;
     const quoted     = m?.extendedTextMessage?.contextInfo?.quotedMessage;
     const stickerMsg = m?.stickerMessage || quoted?.stickerMessage;
-    if (!stickerMsg) return reply("❌ Responda um *sticker animado* com *" + p + "togif*");
+    if (!stickerMsg) return reply(`❌ Responda um *sticker animado* com *${p}togif*`);
     await reply("⏳ Convertendo para GIF...");
     const buffer = await downloadMedia(stickerMsg, "sticker");
-    if (!buffer || buffer.length < 100) return reply("❌ Nao foi possivel converter!");
+    if (!buffer || buffer.length < 100) return reply("❌ Não foi possível converter!");
     await sock.sendMessage(from, { video: buffer, mimetype: "video/mp4", gifPlayback: true }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
@@ -139,29 +80,24 @@ async function togif(ctx) {
 async function attp(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const texto = args.join(" ");
-  if (!texto) return reply("❌ Use: " + p + "attp Seu texto");
+  if (!texto) return reply(`❌ Use: ${p}attp Seu texto`);
   await reply("⏳ Criando sticker animado...");
   try {
     let buffer = null;
-    const apis = [
-      "https://api.agatz.xyz/api/attp?text=" + encodeURIComponent(texto),
-      "https://api.siputzx.my.id/api/sticker/attp?text=" + encodeURIComponent(texto),
-    ];
-    for (const url of apis) {
+    for (const url of [
+      `https://api.agatz.xyz/api/attp?text=${encodeURIComponent(texto)}`,
+      `https://api.siputzx.my.id/api/sticker/attp?text=${encodeURIComponent(texto)}`,
+    ]) {
       try {
         const res = await axios.get(url, { timeout: 15000, responseType: "arraybuffer" });
         const buf = Buffer.from(res.data);
         if (buf.length > 500) { buffer = buf; break; }
         const json = JSON.parse(buf.toString());
         const link = json?.data || json?.url || json?.result;
-        if (link) {
-          const r = await axios.get(link, { responseType: "arraybuffer", timeout: 15000 });
-          buffer  = Buffer.from(r.data);
-          if (buffer.length > 500) break;
-        }
+        if (link) { const r = await axios.get(link, { responseType: "arraybuffer", timeout: 15000 }); buffer = Buffer.from(r.data); if (buffer.length > 500) break; }
       } catch (_) {}
     }
-    if (!buffer || buffer.length < 100) return reply("❌ Nao foi possivel criar o sticker.");
+    if (!buffer || buffer.length < 100) return reply("❌ Não foi possível criar o sticker.");
     await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
@@ -169,29 +105,24 @@ async function attp(ctx) {
 async function ttp(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const texto = args.join(" ");
-  if (!texto) return reply("❌ Use: " + p + "ttp Seu texto");
-  await reply("⏳ Criando sticker de texto...");
+  if (!texto) return reply(`❌ Use: ${p}ttp Seu texto`);
+  await reply("⏳ Criando sticker...");
   try {
     let buffer = null;
-    const apis = [
-      "https://api.agatz.xyz/api/ttp?text=" + encodeURIComponent(texto),
-      "https://api.siputzx.my.id/api/sticker/ttp?text=" + encodeURIComponent(texto),
-    ];
-    for (const url of apis) {
+    for (const url of [
+      `https://api.agatz.xyz/api/ttp?text=${encodeURIComponent(texto)}`,
+      `https://api.siputzx.my.id/api/sticker/ttp?text=${encodeURIComponent(texto)}`,
+    ]) {
       try {
         const res = await axios.get(url, { timeout: 15000, responseType: "arraybuffer" });
         const buf = Buffer.from(res.data);
         if (buf.length > 500) { buffer = buf; break; }
         const json = JSON.parse(buf.toString());
         const link = json?.data || json?.url || json?.result;
-        if (link) {
-          const r = await axios.get(link, { responseType: "arraybuffer", timeout: 15000 });
-          buffer  = Buffer.from(r.data);
-          if (buffer.length > 500) break;
-        }
+        if (link) { const r = await axios.get(link, { responseType: "arraybuffer", timeout: 15000 }); buffer = Buffer.from(r.data); if (buffer.length > 500) break; }
       } catch (_) {}
     }
-    if (!buffer || buffer.length < 100) return reply("❌ Nao foi possivel criar o sticker.");
+    if (!buffer || buffer.length < 100) return reply("❌ Não foi possível criar o sticker.");
     await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
@@ -199,25 +130,21 @@ async function ttp(ctx) {
 async function brat(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const texto = args.join(" ");
-  if (!texto) return reply("❌ Use: " + p + "brat Seu texto");
+  if (!texto) return reply(`❌ Use: ${p}brat Seu texto`);
   await reply("⏳ Criando sticker brat...");
   try {
-    const res = await axios.get(
-      "https://api.agatz.xyz/api/brat?text=" + encodeURIComponent(texto),
-      { timeout: 15000, responseType: "arraybuffer" }
-    );
+    const res = await axios.get(`https://api.agatz.xyz/api/brat?text=${encodeURIComponent(texto)}`, { timeout: 15000, responseType: "arraybuffer" });
     const buf = Buffer.from(res.data);
     let buffer;
-    if (buf.length > 500) {
-      buffer = buf;
-    } else {
+    if (buf.length > 500) { buffer = buf; }
+    else {
       const json = JSON.parse(buf.toString());
       const link = json?.data || json?.url;
       if (!link) return reply("❌ Erro ao gerar!");
       const r = await axios.get(link, { responseType: "arraybuffer", timeout: 15000 });
-      buffer  = Buffer.from(r.data);
+      buffer = Buffer.from(r.data);
     }
-    if (!buffer || buffer.length < 100) return reply("❌ Nao foi possivel criar o sticker.");
+    if (!buffer || buffer.length < 100) return reply("❌ Não foi possível criar.");
     await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
@@ -225,48 +152,32 @@ async function brat(ctx) {
 async function emojimix(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const emojis = args.join("").match(/\p{Emoji}/gu);
-  if (!emojis || emojis.length < 2) return reply("❌ Use: " + p + "emojimix 😀🔥");
+  if (!emojis || emojis.length < 2) return reply(`❌ Use: ${p}emojimix 😀🔥`);
   await reply("⏳ Misturando emojis...");
   try {
     const res = await axios.get(
-      "https://api.agatz.xyz/api/emojimix?emoji1=" + encodeURIComponent(emojis[0]) + "&emoji2=" + encodeURIComponent(emojis[1]),
+      `https://api.agatz.xyz/api/emojimix?emoji1=${encodeURIComponent(emojis[0])}&emoji2=${encodeURIComponent(emojis[1])}`,
       { timeout: 15000, responseType: "arraybuffer" }
     );
     const buffer = Buffer.from(res.data);
-    if (!buffer || buffer.length < 100) return reply("❌ Esses emojis nao podem ser misturados!");
+    if (!buffer || buffer.length < 100) return reply("❌ Esses emojis não podem ser misturados!");
     await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
 async function stickerinfo(ctx) {
   const { msg, reply } = ctx;
-  try {
-    const m          = msg.message;
-    const quoted     = m?.extendedTextMessage?.contextInfo?.quotedMessage;
-    const stickerMsg = m?.stickerMessage || quoted?.stickerMessage;
-    if (!stickerMsg) return reply("❌ Responda um sticker com *" + p + "stickerinfo*");
-    const buffer = await downloadMedia(stickerMsg, "sticker");
-    let pack  = "Desconhecido";
-    let autor = "Desconhecido";
-    try {
-      const str   = buffer.toString("latin1");
-      const start = str.indexOf('{"sticker-pack-name"');
-      if (start !== -1) {
-        const end  = str.indexOf("}", start) + 1;
-        const meta = JSON.parse(str.slice(start, end));
-        pack  = meta["sticker-pack-name"]     || pack;
-        autor = meta["sticker-pack-publisher"] || autor;
-      }
-    } catch (_) {}
-    const anim = stickerMsg?.isAnimated ? "Sim ✅" : "Nao ❌";
-    return reply(
-      "🎨 *INFO DO STICKER*\n\n" +
-      "📦 *Pack:* " + pack + "\n" +
-      "✏️ *Autor:* " + autor + "\n" +
-      "🎞️ *Animado:* " + anim + "\n\n" +
-      "_🤖 Lutchi Zap Hack_"
-    );
-  } catch (e) { return reply("❌ Erro: " + e.message); }
+  const m          = msg.message;
+  const quoted     = m?.extendedTextMessage?.contextInfo?.quotedMessage;
+  const stickerMsg = m?.stickerMessage || quoted?.stickerMessage;
+  if (!stickerMsg) return reply(`❌ Responda um sticker com *${p}stickerinfo*`);
+  return reply(
+    `🎨 *INFO DO STICKER*\n\n` +
+    `📦 *Pack:* ${stickerMsg?.name      || "Desconhecido"}\n` +
+    `✏️ *Autor:* ${stickerMsg?.publisher || "Desconhecido"}\n` +
+    `🎞️ *Animado:* ${stickerMsg?.isAnimated ? "Sim ✅" : "Não ❌"}\n\n` +
+    `_🤖 Lutchi Zap Hack_`
+  );
 }
 
 async function gerarlink(ctx) {
@@ -274,26 +185,21 @@ async function gerarlink(ctx) {
   const m      = msg.message;
   const quoted = m?.extendedTextMessage?.contextInfo?.quotedMessage;
   const imgMsg = m?.imageMessage || quoted?.imageMessage;
-  if (!imgMsg) return reply("❌ Envie ou responda uma imagem com *" + p + "gerarlink*");
+  if (!imgMsg) return reply(`❌ Envie ou responda uma imagem com *${p}gerarlink*`);
   await reply("⏳ Gerando link...");
   try {
     const buffer = await downloadMedia(imgMsg, "image");
-    if (!buffer || buffer.length < 100) return reply("❌ Nao foi possivel processar!");
+    if (!buffer || buffer.length < 100) return reply("❌ Não foi possível processar!");
     const formData = new URLSearchParams();
     formData.append("key", "ba98535942568dba040e79936b8075ab");
     formData.append("image", buffer.toString("base64"));
     const res = await axios.post("https://api.imgbb.com/1/upload", formData, {
-      timeout: 20000,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      timeout: 20000, headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
     const url = res.data?.data?.url;
     if (!url) return reply("❌ Erro ao gerar link!");
-    return reply("🔗 *Link da Imagem:*\n" + url + "\n\n_🤖 Lutchi Zap Hack_");
+    return reply(`🔗 *Link da Imagem:*\n${url}\n\n_🤖 Lutchi Zap Hack_`);
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
-module.exports = {
-  sticker, toimg, togif,
-  attp, ttp, brat,
-  emojimix, stickerinfo, gerarlink,
-};
+module.exports = { sticker, toimg, togif, attp, ttp, brat, emojimix, stickerinfo, gerarlink };
