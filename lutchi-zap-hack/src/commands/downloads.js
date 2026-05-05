@@ -42,6 +42,26 @@ async function dlBuffer(url) {
   return Buffer.from(res.data);
 }
 
+// Função para converter duração para segundos
+function parseDuration(duration) {
+  if (!duration) return null;
+  
+  // Se já for número, retorna
+  if (typeof duration === 'number') return duration;
+  
+  // Se for string no formato "HH:MM:SS" ou "MM:SS"
+  if (typeof duration === 'string') {
+    const parts = duration.split(':').map(Number);
+    if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    } else if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+  }
+  
+  return null;
+}
+
 // Função para enviar com retry automático
 async function sendWithRetry(sock, from, content, retries = 3) {
   for (let i = 1; i <= retries; i++) {
@@ -69,15 +89,27 @@ async function play(ctx) {
     const video = results[0];
     if (!video) return reply("❌ Música não encontrada!");
     
-    // Verificar duração (máximo 10 minutos)
-    const durationSeconds = video.duration || 0;
-    if (durationSeconds > 600) {
+    // CORREÇÃO: Converter duração corretamente
+    let durationSeconds = 0;
+    if (video.duration && typeof video.duration === 'number') {
+      durationSeconds = video.duration;
+    } else if (video.durationFormatted) {
+      durationSeconds = parseDuration(video.durationFormatted) || 0;
+    } else if (video.durationText) {
+      durationSeconds = parseDuration(video.durationText) || 0;
+    }
+    
+    // Se ainda não conseguiu, tentar obter via yt-dlp
+    if (durationSeconds === 0 || durationSeconds > 10000) {
+      // Duração inválida, ignorar verificação
+      console.log("⚠️ Duração não detectada, ignorando limite");
+    } else if (durationSeconds > 600) {
       return reply(`❌ Música muito longa (${Math.floor(durationSeconds/60)}min)\n_Máximo: 10 minutos_`);
     }
     
-    await reply("🎵 *" + video.title + "*\n⏱️ " + (video.durationFormatted || "?") + "\n⬇️ Baixando...");
+    await reply("🎵 *" + video.title.substring(0, 50) + "*\n⏱️ " + (video.durationFormatted || "?") + "\n⬇️ Baixando...");
     
-    // Usar qualidade mais baixa (OPUS 64k) para evitar erro de upload
+    // Usar qualidade mais baixa
     const outFile = path.join(TEMP_DIR, "audio_" + Date.now() + ".mp3");
     await runCmd('yt-dlp --remote-components ejs:github -f bestaudio[ext=webm]/bestaudio --extract-audio --audio-format mp3 --audio-quality 64K -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + video.url + '"', 90000);
     
@@ -92,7 +124,6 @@ async function play(ctx) {
     if (buffer.length < 1000) return reply("❌ Arquivo inválido!");
     if (buffer.length > 15 * 1024 * 1024) return reply("❌ Áudio muito grande (máx 15MB)");
     
-    // Enviar com retry
     await sendWithRetry(sock, from, {
       audio: buffer,
       mimetype: "audio/mpeg",
@@ -100,7 +131,7 @@ async function play(ctx) {
       ptt: false
     });
     
-    await reply(`✅ *${video.title.substring(0, 45)}*\n⏱️ Duração: ${video.durationFormatted || "?"}\n🎵 Enviado!`);
+    await reply(`✅ *${video.title.substring(0, 45)}*\n🎵 Enviado!`);
     
   } catch (e) { 
     cleanTemp(); 
@@ -120,14 +151,20 @@ async function playvid(ctx) {
     const video = results[0];
     if (!video) return reply("❌ Vídeo não encontrado!");
     
-    const durationSeconds = video.duration || 0;
-    if (durationSeconds > 300) {
+    // CORREÇÃO: Converter duração
+    let durationSeconds = 0;
+    if (video.duration && typeof video.duration === 'number') {
+      durationSeconds = video.duration;
+    } else if (video.durationFormatted) {
+      durationSeconds = parseDuration(video.durationFormatted) || 0;
+    }
+    
+    if (durationSeconds > 0 && durationSeconds < 10000 && durationSeconds > 300) {
       return reply(`❌ Vídeo muito longo (${Math.floor(durationSeconds/60)}min)\n_Máximo: 5 minutos_`);
     }
     
-    await reply("🎬 *" + video.title + "*\n⏱️ " + (video.durationFormatted || "?") + "\n⬇️ Baixando...");
+    await reply("🎬 *" + video.title.substring(0, 50) + "*\n⏱️ " + (video.durationFormatted || "?") + "\n⬇️ Baixando...");
     
-    // Qualidade reduzida para 360p
     const outFile = path.join(TEMP_DIR, "video_" + Date.now() + ".mp4");
     await runCmd('yt-dlp --remote-components ejs:github -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]" --merge-output-format mp4 -o "' + outFile + '" "' + video.url + '"', 120000);
     
@@ -168,12 +205,12 @@ async function youtube(ctx) {
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
-// ── TIKTOK (mantido original) ─────────────────────────────────
+// ── TIKTOK ────────────────────────────────────────────────────
 async function tiktok(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const url = args[0];
   if (!url) return reply("❌ Use: .tiktok <link do TikTok>");
-  await reply("⏳ Baixando TikTok sem marca d'água...");
+  await reply("⏳ Baixando TikTok...");
   try {
     try {
       const r = await axios.post("https://www.tikwm.com/api/", "url=" + encodeURIComponent(url), {
@@ -184,7 +221,7 @@ async function tiktok(ctx) {
       if (videoUrl) {
         const buffer = await dlBuffer(videoUrl);
         if (buffer.length > 1000 && buffer.length < 25 * 1024 * 1024) {
-          await sendWithRetry(sock, from, { video: buffer, mimetype: "video/mp4", caption: "🎵 *Lutchi Zap Hack*" });
+          await sendWithRetry(sock, from, { video: buffer, mimetype: "video/mp4", caption: "🎵 *TikTok*" });
           return;
         }
       }
@@ -195,11 +232,11 @@ async function tiktok(ctx) {
     const buffer = fs.readFileSync(outFile);
     fs.unlinkSync(outFile);
     if (buffer.length > 25 * 1024 * 1024) return reply("❌ Vídeo muito grande!");
-    await sendWithRetry(sock, from, { video: buffer, mimetype: "video/mp4", caption: "🎵 *Lutchi Zap Hack*" });
+    await sendWithRetry(sock, from, { video: buffer, mimetype: "video/mp4", caption: "🎵 *TikTok*" });
   } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
-// ── Demais funções mantidas iguais ───────────────────────────
+// ── Demais funções ───────────────────────────────────────────
 async function instagram(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const url = args[0];
@@ -208,7 +245,7 @@ async function instagram(ctx) {
   try {
     const outFile = path.join(TEMP_DIR, "insta_" + Date.now() + ".mp4");
     await runCmd('yt-dlp --remote-components ejs:github -o "' + outFile + '" "' + url + '"', 60000);
-    if (!fs.existsSync(outFile)) return reply("❌ Não foi possível baixar! O perfil é público?");
+    if (!fs.existsSync(outFile)) return reply("❌ Não foi possível baixar!");
     const buffer = fs.readFileSync(outFile);
     fs.unlinkSync(outFile);
     const isVideo = buffer.length > 500000;
@@ -254,15 +291,15 @@ async function spotify(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const url = args[0];
   if (!url) return reply("❌ Use: .spotify <link do Spotify>");
-  await reply("⏳ Procurando música no Spotify...\n_Buscando no YouTube..._");
+  await reply("⏳ Procurando música...");
   try {
     const r = await axios.get("https://api.song.link/v1-alpha.1/links?url=" + encodeURIComponent(url), { timeout: 15000 });
     const title = r.data?.entitiesByUniqueId?.[r.data?.entityUniqueId]?.title || "";
     const artist = r.data?.entitiesByUniqueId?.[r.data?.entityUniqueId]?.artistName || "";
     const query = (artist + " " + title).trim() || "música";
-    await reply("🎵 Encontrado: *" + title + "* - " + artist + "\n⬇️ Baixando...");
+    await reply("🎵 Encontrado: *" + title + "*\n⬇️ Baixando...");
     const results = await YouTube.search(query, { limit: 1, type: "video" });
-    if (!results[0]) return reply("❌ Não encontrei essa música!");
+    if (!results[0]) return reply("❌ Não encontrei!");
     const outFile = path.join(TEMP_DIR, "spotify_" + Date.now() + ".mp3");
     await runCmd('yt-dlp --remote-components ejs:github -f bestaudio[ext=webm]/bestaudio --extract-audio --audio-format mp3 --audio-quality 64K -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + results[0].url + '"', 90000);
     const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("spotify_"));
@@ -279,13 +316,13 @@ async function soundcloud(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const url = args[0];
   if (!url) return reply("❌ Use: .soundcloud <link do SoundCloud>");
-  await reply("⏳ Baixando do SoundCloud...");
+  await reply("⏳ Baixando...");
   try {
     const outFile = path.join(TEMP_DIR, "sc_" + Date.now() + ".mp3");
     await runCmd('yt-dlp --remote-components ejs:github -f bestaudio[ext=webm]/bestaudio --extract-audio --audio-format mp3 --audio-quality 64K -o "' + outFile.replace(".mp3", ".%(ext)s") + '" "' + url + '"', 90000);
     const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("sc_"));
     const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
-    if (!file) return reply("❌ Não foi possível baixar!");
+    if (!file) return reply("❌ Erro ao baixar!");
     const buffer = fs.readFileSync(file);
     fs.unlinkSync(file);
     if (buffer.length > 15 * 1024 * 1024) return reply("❌ Áudio muito grande!");
@@ -296,8 +333,8 @@ async function soundcloud(ctx) {
 async function mediafire(ctx) {
   const { args, reply } = ctx;
   const url = args[0];
-  if (!url) return reply("❌ Use: .mediafire <link do Mediafire>");
-  await reply("⏳ Obtendo link direto...");
+  if (!url) return reply("❌ Use: .mediafire <link>");
+  await reply("⏳ Obtendo link...");
   try {
     const r = await axios.get("https://api.agatz.xyz/api/mediafire?url=" + encodeURIComponent(url), { timeout: 15000 });
     const dlUrl = r.data?.data?.url || r.data?.data;
@@ -312,10 +349,10 @@ async function tomp3(ctx) {
   const q = m?.extendedTextMessage?.contextInfo?.quotedMessage;
   const videoMsg = m?.videoMessage || q?.videoMessage;
   if (!videoMsg) return reply("❌ Responda um vídeo com *.tomp3*");
-  await reply("⏳ Convertendo para áudio...");
+  await reply("⏳ Convertendo...");
   try {
     const buffer = await dlFromMsg(videoMsg, "video");
-    if (buffer.length > 15 * 1024 * 1024) return reply("❌ Vídeo muito grande para converter!");
+    if (buffer.length > 15 * 1024 * 1024) return reply("❌ Vídeo muito grande!");
     await sendWithRetry(sock, from, { audio: buffer, mimetype: "audio/mpeg" });
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
@@ -325,13 +362,10 @@ async function revelarft(ctx) {
   if (!isAdmin && !isOwner) return reply("❌ Apenas administradores!");
   try {
     const q = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-    if (!q) return reply("❌ Responda uma mensagem de visualização única com *.revelarft*");
-    const voMsg =
-      q?.viewOnceMessage?.message ||
-      q?.viewOnceMessageV2?.message ||
-      q?.viewOnceMessageV2Extension?.message;
+    if (!q) return reply("❌ Responda uma mensagem de visualização única!");
+    const voMsg = q?.viewOnceMessage?.message || q?.viewOnceMessageV2?.message || q?.viewOnceMessageV2Extension?.message;
     const mediaMsg = voMsg?.imageMessage || voMsg?.videoMessage || voMsg?.audioMessage || q?.imageMessage || q?.videoMessage;
-    if (!mediaMsg) return reply("❌ Não encontrei mídia de visualização única!");
+    if (!mediaMsg) return reply("❌ Não encontrei mídia!");
     await reply("🔓 Revelando...");
     const isVideo = !!(voMsg?.videoMessage) || !!(mediaMsg?.seconds);
     const isAudio = !!(voMsg?.audioMessage);
@@ -340,37 +374,33 @@ async function revelarft(ctx) {
     await sendWithRetry(sock, from, {
       [type]: buffer,
       mimetype: isVideo ? "video/mp4" : isAudio ? "audio/ogg; codecs=opus" : "image/jpeg",
-      caption: !isAudio ? "🔓 *Revelado pelo Lutchi Zap Hack*" : undefined,
+      caption: !isAudio ? "🔓 *Revelado*" : undefined,
     });
-  } catch (e) { return reply("❌ Erro ao revelar: " + e.message); }
+  } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
 async function clonar(ctx) {
   const { sock, from, args, reply, isAdmin, isOwner } = ctx;
   if (!isAdmin && !isOwner) return reply("❌ Apenas administradores!");
   const input = args[0];
-  if (!input) return reply("❌ Use: .clonar <link do grupo>\n\nEx: .clonar https://chat.whatsapp.com/XXXXX");
-  await reply("⏳ Obtendo informações do grupo...");
+  if (!input) return reply("❌ Use: .clonar <link do grupo>");
+  await reply("⏳ Clonando...");
   try {
     let code = input.trim();
     if (code.includes("chat.whatsapp.com/")) {
       code = code.split("chat.whatsapp.com/")[1];
       code = code.split("?")[0].split("/")[0].trim();
     }
-    console.log("Código extraído:", code);
-    const info = await sock.groupGetInviteInfo(code).catch((e) => {
-      console.log("groupGetInviteInfo erro:", e.message);
-      return null;
-    });
-    if (!info) return reply("❌ Link inválido ou expirado!\n\n💡 Certifique-se que:\n• O link está correto\n• O link não expirou\n• O bot está no grupo de origem");
-    await reply("📋 Grupo: *" + info.subject + "*\n👥 Membros: " + info.size + "\n⏳ Adicionando a cada 3s...");
+    const info = await sock.groupGetInviteInfo(code).catch(() => null);
+    if (!info) return reply("❌ Link inválido!");
+    await reply("📋 Grupo: *" + info.subject + "*\n👥 Membros: " + info.size);
     let meta = await sock.groupMetadata(info.id).catch(() => null);
     if (!meta) {
       await sock.groupAcceptInvite(code).catch(() => {});
       await new Promise(r => setTimeout(r, 3000));
       meta = await sock.groupMetadata(info.id).catch(() => null);
     }
-    if (!meta) return reply("❌ Não consegui acessar os membros.\n💡 O bot precisa estar no grupo de origem!");
+    if (!meta) return reply("❌ Bot precisa estar no grupo de origem!");
     const botNum = (sock.user?.id || "").split(":")[0].split("@")[0];
     const members = meta.participants.map(p => p.id).filter(id => !id.includes(botNum));
     let adicionados = 0, falhos = 0;
@@ -378,17 +408,12 @@ async function clonar(ctx) {
       try { await sock.groupParticipantsUpdate(from, [jid], "add"); adicionados++; } catch (_) { falhos++; }
       await new Promise(r => setTimeout(r, 3000));
     }
-    return reply("✅ *CLONAGEM CONCLUÍDA!*\n\n👥 Total: *" + members.length + "*\n✅ Adicionados: *" + adicionados + "*\n❌ Falhos: *" + falhos + "*");
-  } catch (e) { return reply("❌ Erro ao clonar: " + e.message); }
+    return reply("✅ *CLONAGEM CONCLUÍDA!*\n✅ Adicionados: " + adicionados + "\n❌ Falhos: " + falhos);
+  } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
 async function shazam(ctx) {
-  const { msg, reply } = ctx;
-  const m = msg.message;
-  const q = m?.extendedTextMessage?.contextInfo?.quotedMessage;
-  const audioMsg = m?.audioMessage || q?.audioMessage;
-  if (!audioMsg) return reply("❌ Responda um áudio com *.shazam*");
-  return reply("⚠️ Configure sua API Key do Shazam (RapidAPI) para usar este comando.");
+  return ctx.reply("⚠️ Comando em desenvolvimento.");
 }
 
 module.exports = { play, playvid, youtube, tiktok, instagram, facebook, kwai, spotify, soundcloud, mediafire, tomp3, revelarft, clonar, shazam };
