@@ -4,6 +4,7 @@ const path = require("path");
 const DB_PATH = path.join(__dirname, "../../data/database.json");
 
 let db = {
+  boasvindas: {},
   groups:      {},
   warnings:    {},
   muted:       {},
@@ -117,6 +118,16 @@ function getModoBot(groupId)       { return db.modoBot[groupId] || "admins"; } /
 // ── Boas-vindas ───────────────────────────────────────────────
 function setBoasVindas(groupId, status) { db.boasVindas[groupId] = status; saveDatabase(); }
 function getBoasVindas(groupId)         { return db.boasVindas[groupId] || false; } // padrão: desligado
+
+
+function setBoasvindas(groupId, status) {
+  db.boasvindas[groupId] = status;
+  saveDatabase();
+}
+
+function getBoasvindas(groupId) {
+  return db.boasvindas[groupId] !== undefined ? db.boasvindas[groupId] : true;
+}
 
 module.exports = {
   loadDatabase, saveDatabase,

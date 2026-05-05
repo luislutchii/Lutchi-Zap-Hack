@@ -103,7 +103,9 @@ async function startBot() {
       const jid = typeof participant === "string" ? participant : participant?.id || "";
       const num = jid.includes("@") ? jid.split("@")[0] : jid;
 
-      if (action === "add") {
+      const { getBoasvindas } = require("./utils/database");
+        if (action === "add") {
+          if (!getBoasvindas(id)) continue;
         if (!getBoasVindas(id)) continue;
         const regras      = getRules(id) || config.defaultRules;
         const welcomeText =
