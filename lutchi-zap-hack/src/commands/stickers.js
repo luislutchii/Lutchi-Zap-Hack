@@ -1,4 +1,8 @@
-const axios  = require("axios");
+const axios   = require("axios");
+const ffmpeg  = require("fluent-ffmpeg");
+const fs      = require("fs");
+const path    = require("path");
+const os      = require("os");
 const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 const p = ".";
 
@@ -8,6 +12,42 @@ async function downloadMedia(mediaMsg, type) {
   const chunks = [];
   for await (const chunk of stream) chunks.push(chunk);
   return Buffer.concat(chunks);
+}
+
+// ── Converte buffer para WebP via ffmpeg ──────────────────────
+function convertToWebP(inputBuffer, isVideo = false) {
+  return new Promise((resolve, reject) => {
+    const tmpIn  = path.join(os.tmpdir(), `stk_in_${Date.now()}.${isVideo ? "mp4" : "jpg"}`);
+    const tmpOut = path.join(os.tmpdir(), `stk_out_${Date.now()}.webp`);
+
+    fs.writeFileSync(tmpIn, inputBuffer);
+
+    const cmd = ffmpeg(tmpIn)
+      .outputOptions([
+        "-vf", "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
+        "-vcodec", "libwebp",
+        "-loop", isVideo ? "0" : "1",
+        "-preset", "icon",
+        "-an",
+        "-vsync", "0",
+        "-t", "00:00:05",
+      ])
+      .toFormat("webp")
+      .save(tmpOut);
+
+    cmd.on("end", () => {
+      const buf = fs.readFileSync(tmpOut);
+      fs.unlinkSync(tmpIn);
+      fs.unlinkSync(tmpOut);
+      resolve(buf);
+    });
+
+    cmd.on("error", (err) => {
+      try { fs.unlinkSync(tmpIn); } catch (_) {}
+      try { fs.unlinkSync(tmpOut); } catch (_) {}
+      reject(err);
+    });
+  });
 }
 
 // ── .sticker ──────────────────────────────────────────────────
@@ -28,11 +68,13 @@ async function sticker(ctx) {
     );
 
     await reply("⏳ Criando sticker...");
-    const type   = vidMsg && !imgMsg ? "video" : "image";
-    const buffer = await downloadMedia(media, type);
+    const isVideo = !!(vidMsg && !imgMsg);
+    const buffer  = await downloadMedia(media, isVideo ? "video" : "image");
     if (!buffer || buffer.length < 100) return reply("❌ Não foi possível baixar a mídia!");
 
-    await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
+    const webpBuffer = await convertToWebP(buffer, isVideo);
+    await sock.sendMessage(from, { sticker: webpBuffer }, { quoted: msg });
+
   } catch (e) {
     console.error("[STICKER]", e.message);
     return reply("❌ Erro ao criar sticker: " + e.message);
@@ -52,10 +94,29 @@ async function toimg(ctx) {
     const buffer = await downloadMedia(stickerMsg, "sticker");
     if (!buffer || buffer.length < 100) return reply("❌ Não foi possível converter!");
 
-    // Envia o WebP directamente como imagem — WhatsApp aceita WebP
+    // Converte WebP para PNG via ffmpeg
+    const pngBuffer = await new Promise((resolve, reject) => {
+      const tmpIn  = path.join(os.tmpdir(), `toimg_in_${Date.now()}.webp`);
+      const tmpOut = path.join(os.tmpdir(), `toimg_out_${Date.now()}.png`);
+      fs.writeFileSync(tmpIn, buffer);
+      ffmpeg(tmpIn)
+        .toFormat("png")
+        .save(tmpOut)
+        .on("end", () => {
+          const buf = fs.readFileSync(tmpOut);
+          fs.unlinkSync(tmpIn);
+          fs.unlinkSync(tmpOut);
+          resolve(buf);
+        })
+        .on("error", (e) => {
+          try { fs.unlinkSync(tmpIn); } catch (_) {}
+          try { fs.unlinkSync(tmpOut); } catch (_) {}
+          reject(e);
+        });
+    });
+
     await sock.sendMessage(from, {
-      image: buffer,
-      mimetype: "image/webp",
+      image: pngBuffer,
       caption: "🖼️ *Lutchi Zap Hack*",
     }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
@@ -82,7 +143,7 @@ async function togif(ctx) {
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
-// ── .attp — Texto animado ─────────────────────────────────────
+// ── .attp ─────────────────────────────────────────────────────
 async function attp(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const texto = args.join(" ");
@@ -113,7 +174,7 @@ async function attp(ctx) {
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
-// ── .ttp — Texto simples ──────────────────────────────────────
+// ── .ttp ─────────────────────────────────────────────────────
 async function ttp(ctx) {
   const { args, reply, sock, from, msg } = ctx;
   const texto = args.join(" ");
