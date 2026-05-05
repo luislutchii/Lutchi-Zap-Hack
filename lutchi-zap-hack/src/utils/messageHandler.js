@@ -141,6 +141,7 @@ async function routeCommand(command, ctx) {
     unmute:          () => modCommands.unmute(ctx),
     antilink:        () => modCommands.antilink(ctx),
     antiflood:       () => modCommands.antiflood(ctx),
+    antimention:     () => modCommands.antimention(ctx),
     banword:         () => modCommands.banword(ctx),
     delbanword:      () => modCommands.delbanword ? modCommands.delbanword(ctx) : ctx.reply("🔧 Em breve!"),
     limparbanword:   () => modCommands.limparbanword ? modCommands.limparbanword(ctx) : ctx.reply("🔧 Em breve!"),
@@ -287,3 +288,5 @@ const _origHandler = module.exports;
 const { getAntiMention } = require("../utils/database");
 
 const _prevPassive = passiveModeration;
+// Patch: importar getAntiMention
+const { getAntiMention } = require("../utils/database");

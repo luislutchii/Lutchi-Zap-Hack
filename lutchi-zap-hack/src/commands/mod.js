@@ -8,6 +8,7 @@ const {
   setBotStatus, getBotStatus,
   setModoBot, getModoBot,
   setBoasVindas, getBoasVindas,
+  setAntiMention, getAntiMention,
 } = require("../utils/database");
 
 const p = config.prefix;
@@ -132,6 +133,26 @@ async function antiflood(ctx) {
   );
 }
 
+async function antimention(ctx) {
+  const { from, args, reply, isGroup } = ctx;
+  if (!isGroup) return reply("❌ Apenas em grupos!");
+  const option = args[0]?.toLowerCase();
+  if (!["on", "off"].includes(option)) {
+    const status = getAntiMention(from);
+    return reply(
+      `🔔 *Anti-Menção Admin:* ${status ? "✅ Ativado" : "❌ Desativado"}\n\n` +
+      `_Quando ativado, membros que mencionarem\nadmins ou o dono serão banidos._\n\n` +
+      `Use: *${p}antimention on/off*`
+    );
+  }
+  setAntiMention(from, option === "on");
+  return reply(
+    option === "on"
+      ? `🔔 *Anti-Menção Admin ativado!* ✅\n_Membros que mencionarem admins/dono serão banidos automaticamente._`
+      : `🔔 *Anti-Menção Admin desativado!* ❌`
+  );
+}
+
 async function banword(ctx) {
   const { from, args, reply } = ctx;
   if (!args.length) {
@@ -172,23 +193,14 @@ async function ligarbot(ctx) {
   const { from, reply, isOwner } = ctx;
   if (!isOwner) return reply("🔒 Apenas o *dono do bot* pode usar este comando!");
   setBotStatus(from, true);
-  return reply(
-    `✅ *Bot ligado!*\n\n` +
-    `🤖 O bot voltará a responder normalmente.\n\n` +
-    `_🤖 Lutchi Zap Hack_`
-  );
+  return reply(`✅ *Bot ligado!*\n\n🤖 O bot voltará a responder normalmente.\n\n_🤖 Lutchi Zap Hack_`);
 }
 
 async function desligarbot(ctx) {
   const { from, reply, isOwner } = ctx;
   if (!isOwner) return reply("🔒 Apenas o *dono do bot* pode usar este comando!");
   setBotStatus(from, false);
-  return reply(
-    `❌ *Bot desligado!*\n\n` +
-    `🤖 O bot não responderá até ser religado.\n` +
-    `Use *${p}ligarbot* para religar.\n\n` +
-    `_🤖 Lutchi Zap Hack_`
-  );
+  return reply(`❌ *Bot desligado!*\n\n🤖 O bot não responderá até ser religado.\nUse *${p}ligarbot* para religar.\n\n_🤖 Lutchi Zap Hack_`);
 }
 
 async function modobot(ctx) {
@@ -222,8 +234,7 @@ async function boasvindas(ctx) {
     return reply(
       `👋 *Boas-Vindas:* ${status ? "✅ Ativado" : "❌ Desativado"}\n\n` +
       `Use: *${p}boasvindas on/off*\n\n` +
-      `_Quando ativado, novos membros recebem\n` +
-      `mensagem de boas-vindas com a foto de perfil._`
+      `_Quando ativado, novos membros recebem\nmensagem de boas-vindas com a foto de perfil._`
     );
   }
   setBoasVindas(from, option === "on");
@@ -237,46 +248,7 @@ async function boasvindas(ctx) {
 module.exports = {
   warn, warnings, resetwarn,
   mute, unmute,
-  antilink, antiflood,
+  antilink, antiflood, antimention,
   banword, delbanword, limparbanword,
   ligarbot, desligarbot, modobot, boasvindas,
 };
-
-// ── ANTIMENÇÃO ADMINS ─────────────────────────────────────────
-async function antimentadmin(ctx) {
-  const { args, reply, from, isGroup } = ctx;
-  if (!isGroup) return reply("❌ Apenas em grupos!");
-  const option = args[0]?.toLowerCase();
-  const { setAntiMentAdmin, getAntiMentAdmin } = require("../utils/database");
-  if (!option || !["on", "off"].includes(option)) {
-    const status = getAntiMentAdmin(from);
-    return reply("🛡️ *Anti-Menção Admin:* " + (status ? "✅ Ativado" : "❌ Desativado") + "\n\nUse: .antimentadmin on/off");
-  }
-  setAntiMentAdmin(from, option === "on");
-  return reply("🛡️ *Anti-Menção Admin " + (option === "on" ? "Ativado ✅" : "Desativado ❌") + "*\n" +
-    (option === "on" ? "_Membros que mencionarem admins serão banidos!_" : "_Proteção desativada._"));
-}
-
-module.exports = Object.assign(module.exports, { antimentadmin });
-
-async function antimention(ctx) {
-  const { from, args, reply } = ctx;
-  const option = args[0]?.toLowerCase();
-  if (!["on", "off"].includes(option)) {
-    const { getAntiMention } = require("../utils/database");
-    const status = getAntiMention(from);
-    return reply(
-      `🔔 *Anti-Mention Admin:* ${status ? "✅ Ativado" : "❌ Desativado"}\n\n` +
-      `_Quando ativado, membros que mencionarem\nadmins ou o dono serão banidos._\n\n` +
-      `Use: *.antimention on/off*`
-    );
-  }
-  const { setAntiMention } = require("../utils/database");
-  setAntiMention(from, option === "on");
-  return reply(option === "on"
-    ? `🔔 *Anti-Mention ativado!* ✅\n_Membros que mencionarem admins/dono serão banidos._`
-    : `🔔 *Anti-Mention desativado!* ❌`
-  );
-}
-
-module.exports.antimention = antimention;

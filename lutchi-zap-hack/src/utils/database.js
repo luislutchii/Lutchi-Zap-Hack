@@ -168,3 +168,16 @@ function setAntiMention(groupId, status) { db.antiMention = db.antiMention || {}
 function getAntiMention(groupId)         { return db.antiMention?.[groupId] || false; }
 
 module.exports = Object.assign(module.exports, { setAntiMention, getAntiMention });
+
+// ── ANTI-MENTION ──────────────────────────────────────────────
+function setAntiMention(groupId, value) {
+  if (!db.groups[groupId]) db.groups[groupId] = {};
+  db.groups[groupId].antiMention = value;
+  saveDatabase();
+}
+
+function getAntiMention(groupId) {
+  return db.groups[groupId]?.antiMention || false;
+}
+
+module.exports = Object.assign(module.exports, { setAntiMention, getAntiMention });
