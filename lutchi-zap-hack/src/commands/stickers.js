@@ -1,5 +1,4 @@
 const axios  = require("axios");
-const sharp  = require("sharp");
 const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 const p = ".";
 
@@ -11,35 +10,14 @@ async function downloadMedia(mediaMsg, type) {
   return Buffer.concat(chunks);
 }
 
-// ── Converte imagem para WebP 512x512 (formato sticker) ───────
-async function toWebP(buffer) {
-  return sharp(buffer)
-    .resize(512, 512, {
-      fit: "contain",
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .webp({ quality: 80 })
-    .toBuffer();
-}
-
-// ── Download via URL ──────────────────────────────────────────
-async function downloadUrl(url) {
-  const res = await axios.get(url, {
-    responseType: "arraybuffer",
-    timeout: 20000,
-    headers: { "User-Agent": "Mozilla/5.0" },
-  });
-  return Buffer.from(res.data);
-}
-
 // ── .sticker ──────────────────────────────────────────────────
 async function sticker(ctx) {
   const { sock, from, msg, reply } = ctx;
   try {
     const m      = msg.message;
     const quoted = m?.extendedTextMessage?.contextInfo?.quotedMessage;
-    const imgMsg = m?.imageMessage  || quoted?.imageMessage  || null;
-    const vidMsg = m?.videoMessage  || quoted?.videoMessage  || null;
+    const imgMsg = m?.imageMessage || quoted?.imageMessage || null;
+    const vidMsg = m?.videoMessage || quoted?.videoMessage || null;
     const media  = imgMsg || vidMsg;
 
     if (!media) return reply(
@@ -50,24 +28,11 @@ async function sticker(ctx) {
     );
 
     await reply("⏳ Criando sticker...");
-
     const type   = vidMsg && !imgMsg ? "video" : "image";
     const buffer = await downloadMedia(media, type);
+    if (!buffer || buffer.length < 100) return reply("❌ Não foi possível baixar a mídia!");
 
-    if (!buffer || buffer.length < 100)
-      return reply("❌ Não foi possível baixar a mídia!");
-
-    // Converte para WebP se for imagem
-    let stickerBuffer;
-    if (type === "image") {
-      stickerBuffer = await toWebP(buffer);
-    } else {
-      // Vídeo: envia directamente (Baileys converte automaticamente)
-      stickerBuffer = buffer;
-    }
-
-    await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: msg });
-
+    await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
   } catch (e) {
     console.error("[STICKER]", e.message);
     return reply("❌ Erro ao criar sticker: " + e.message);
@@ -87,11 +52,10 @@ async function toimg(ctx) {
     const buffer = await downloadMedia(stickerMsg, "sticker");
     if (!buffer || buffer.length < 100) return reply("❌ Não foi possível converter!");
 
-    // Converte WebP para PNG
-    const pngBuffer = await sharp(buffer).png().toBuffer();
-
+    // Envia o WebP directamente como imagem — WhatsApp aceita WebP
     await sock.sendMessage(from, {
-      image: pngBuffer,
+      image: buffer,
+      mimetype: "image/webp",
       caption: "🖼️ *Lutchi Zap Hack*",
     }, { quoted: msg });
   } catch (e) { return reply("❌ Erro: " + e.message); }
@@ -199,8 +163,8 @@ async function brat(ctx) {
       const json = JSON.parse(buf.toString());
       const link = json?.data || json?.url;
       if (!link) return reply("❌ Erro ao gerar!");
-      const r   = await axios.get(link, { responseType: "arraybuffer", timeout: 15000 });
-      buffer    = Buffer.from(r.data);
+      const r = await axios.get(link, { responseType: "arraybuffer", timeout: 15000 });
+      buffer  = Buffer.from(r.data);
     }
     if (!buffer || buffer.length < 100) return reply("❌ Não foi possível criar o sticker.");
     await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
