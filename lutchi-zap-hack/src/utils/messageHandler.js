@@ -1,6 +1,5 @@
-
 const config = require("../config/config");
-const { getAntiLink, getAntiFlood, getBanwords, isMuted, getAntiMention } = require("./database");
+const { getAntiLink, getAntiFlood, getBanwords, isMuted, getAntiMention, isUserAdmin } = require("./database");
 
 const infoCommands     = require("../commands/info");
 const adminCommands    = require("../commands/admin");
@@ -103,7 +102,6 @@ async function messageHandler(sock, msg, store) {
         sock.sendMessage(from, { text, ...opts }, { quoted: msg }),
     };
 
-    // Reação ✅ ao receber comando válido
     try {
       await sock.sendMessage(from, {
         react: { text: "✅", key: msg.key }
@@ -153,8 +151,6 @@ async function routeCommand(command, ctx) {
     delbanword:      () => modCommands.delbanword ? modCommands.delbanword(ctx) : ctx.reply("🔧 Em breve!"),
     limparbanword:   () => modCommands.limparbanword ? modCommands.limparbanword(ctx) : ctx.reply("🔧 Em breve!"),
     boasvindas:      () => modCommands.boasvindas(ctx),
-    antimention:     () => modCommands.antimention(ctx),
-    antimentadmin:   () => modCommands.antimentadmin(ctx),
     ligarbot:        () => ownerCommands.ligarbot(ctx),
     desligarbot:     () => ownerCommands.desligarbot(ctx),
     modobot:         () => ownerCommands.modobot(ctx),
@@ -220,7 +216,7 @@ async function routeCommand(command, ctx) {
 
 async function passiveModeration(sock, msg, from, sender, body, messageContent) {
   try {
-    // Anti-menção a admins
+    // Anti-mentção a admins
     if (getAntiMention(from)) {
       const groupMeta = await sock.groupMetadata(from).catch(() => null);
       if (groupMeta) {
@@ -251,14 +247,38 @@ async function passiveModeration(sock, msg, from, sender, body, messageContent) 
     return;
   }
 
-  // Anti-link
+  // ==============================================================
+  // 🔗 ANTI-LINK COM BAN (remove link + expulsa o membro)
+  // ==============================================================
   if (getAntiLink(from) && /(https?:\/\/|www\.|chat\.whatsapp\.com)/gi.test(body)) {
-    await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-    await sock.sendMessage(from, {
-      text: "⚠️ @" + normalizeId(sender) + " links não são permitidos!",
-      mentions: [sender],
-    });
-    return;
+    // Obter metadata do grupo para verificar quem é admin
+    const groupMeta = await sock.groupMetadata(from).catch(() => null);
+    let isAdminUser = false;
+    
+    if (groupMeta) {
+      const senderPhone = normalizeId(sender);
+      const senderLid = normalizeId(msg.key?.participant ?? "");
+      const admins = groupMeta.participants.filter(p => p.admin);
+      isAdminUser = admins.some(p => matchParticipant(p.id, senderPhone, senderLid));
+    }
+    
+    // Se NÃO for administrador, aplica a punição com BAN
+    if (!isAdminUser) {
+      // 1. Deletar a mensagem com link
+      await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
+      
+      // 2. Banir/Expulsar o membro do grupo
+      await sock.groupParticipantsUpdate(from, [sender], "remove").catch(() => {});
+      
+      // 3. Avisar o grupo sobre o banimento
+      await sock.sendMessage(from, {
+        text: "🔨 @" + normalizeId(sender) + " foi *BANIDO* por enviar link!\n\n📌 *Regra:* Links não são permitidos para membros comuns.\n👑 *Administradores* estão liberados.",
+        mentions: [sender],
+      }).catch(() => {});
+      
+      return;
+    }
+    // Se for administrador, simplesmente deixa a mensagem passar (não faz nada)
   }
 
   // Anti-flood
@@ -289,8 +309,3 @@ async function passiveModeration(sock, msg, from, sender, body, messageContent) 
 }
 
 module.exports = messageHandler;
-
-// Sobrescreve passiveModeration para incluir antiMention
-const _origHandler = module.exports;
-
-const _prevPassive = passiveModeration;

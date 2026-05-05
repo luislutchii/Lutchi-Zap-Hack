@@ -97,21 +97,27 @@ async function unmute(ctx) {
   }
 }
 
+// 🔗 COMANDO ANTILINK ATUALIZADO COM MENSAGEM DE BAN
 async function antilink(ctx) {
-  const { from, args, reply } = ctx;
+  const { from, args, reply, isAdmin } = ctx;
   const option = args[0]?.toLowerCase();
+  
   if (!["on", "off"].includes(option)) {
     const status = getAntiLink(from);
     return reply(
       `🔗 *Anti-Link:* ${status ? "✅ Ativado" : "❌ Desativado"}\n\n` +
+      `📌 *Regras:*\n` +
+      `• ${status ? "⚠️" : "✅"} *Membros comuns* → ${status ? "⚠️ BANIDOS ao enviar links" : "liberados"}\n` +
+      `• 👑 *Administradores* → sempre liberados (mesmo com anti-link ativo)\n\n` +
       `Use: *${p}antilink on/off*`
     );
   }
+  
   setAntiLink(from, option === "on");
   return reply(
     option === "on"
-      ? `🔗 *Anti-Link ativado!* ✅\n_Links serão removidos e o membro banido._`
-      : `🔗 *Anti-Link desativado!* ❌`
+      ? `🔗 *Anti-Link ativado!* ✅\n\n⚠️ *MEMBROS COMUNS* que enviarem links serão:\n1️⃣ Mensagem deletada\n2️⃣ BANIDOS do grupo\n\n👑 *Administradores* podem enviar links livremente.`
+      : `🔗 *Anti-Link desativado!* ❌\n_Todos os membros (incluindo comuns) podem enviar links._`
   );
 }
 
