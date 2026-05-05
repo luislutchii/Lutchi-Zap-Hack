@@ -15,6 +15,17 @@ const anuncioCommands     = require("../commands/anuncio");
 
 const floodTracker = {};
 
+const PUBLIC_COMMANDS = new Set([
+  "lutchi", "menu", "ping", "dono", "sobre",
+  "dado", "flip", "citar", "conselhos", "conselhobiblico",
+  "cantadas", "spoiler", "fazernick", "calcular",
+  "letramusica", "tabela", "signo", "obesidade",
+  "clima", "traduzir", "wikipedia", "dicionario",
+  "tinyurl", "googlesrc", "gimage", "wame", "sistema",
+  "temadebate", "favor", "contra", "votos", "fimdebate", "novotema",
+  "anuncio",
+]);
+
 function normalizeId(jid) {
   if (!jid) return "";
   return jid.replace(/:.*@/, "@").replace(/@.*/, "").trim();
@@ -120,6 +131,13 @@ async function messageHandler(sock, msg, store) {
 async function routeCommand(command, ctx) {
   const routes = {
     anuncio:         () => anuncioCommands.anuncio(ctx),
+    debate:          () => debateCommands.debate(ctx),
+    favor:           () => debateCommands.votoFavor(ctx),
+    contra:          () => debateCommands.votoContra(ctx),
+    votos:           () => debateCommands.verVotos(ctx),
+    fimdebate:       () => debateCommands.fimDebate(ctx),
+    novotema:        () => debateCommands.novotema(ctx),
+    temadebate:      () => debateCommands.temadebate(ctx),
     lutchi:          () => infoCommands.lutchi(ctx),
     menu:            () => infoCommands.menu(ctx),
     ping:            () => infoCommands.ping(ctx),

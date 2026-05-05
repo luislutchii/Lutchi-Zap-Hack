@@ -42,289 +42,174 @@ async function dlBuffer(url) {
   return Buffer.from(res.data);
 }
 
-// ── BUSCA INTELIGENTE COM YT-DLP ─────────────────────────────
-async function searchYouTube(query, limit = 1) {
-  try {
-    // Usar yt-dlp para buscar vídeos (mais confiável)
-    const searchCmd = `yt-dlp --dump-json --flat-playlist --playlist-end ${limit} "ytsearch${limit}:${query}" 2>/dev/null`;
-    const stdout = await execPromise(searchCmd);
-    
-    const results = [];
-    const lines = stdout.stdout.trim().split('\n');
-    
-    for (const line of lines) {
-      try {
-        const data = JSON.parse(line);
-        results.push({
-          id: data.id,
-          title: data.title,
-          url: `https://youtube.com/watch?v=${data.id}`,
-          duration: data.duration || 0,
-          durationFormatted: data.duration ? formatDuration(data.duration) : "?",
-          channel: data.uploader || "Unknown"
-        });
-      } catch (e) {}
-    }
-    
-    return results;
-  } catch (err) {
-    console.log("Erro na busca:", err.message);
-    return [];
-  }
-}
-
 function formatDuration(seconds) {
   if (!seconds || seconds < 0) return "?";
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   if (mins >= 60) {
     const hours = Math.floor(mins / 60);
-    return `${hours}:${(mins % 60).toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${hours}:${(mins % 60).toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-// Função para enviar com retry automático
 async function sendWithRetry(sock, from, content, retries = 3) {
   for (let i = 1; i <= retries; i++) {
     try {
       await sock.sendMessage(from, content);
       return true;
     } catch (err) {
-      console.log(`⚠️ Tentativa ${i} falhou: ${err.message}`);
       if (i === retries) throw err;
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(r => setTimeout(r, 2000));
     }
   }
   return false;
 }
 
-// ── PLAY (YouTube MP3 com busca inteligente) ─────────────────
+// ── PLAY ─────────────────────────────────────────────────────
 async function play(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
-  if (!args.length) return reply("❌ Use: .play Nome da música ou link do YouTube");
-  
+  const { args, reply, sock, from } = ctx;
+  if (!args.length) return reply("❌ Use: .play Nome da música ou link");
   const query = args.join(" ");
-  await reply("🔍 *Buscando música inteligente...*\n_Usando algoritmo avançado de busca_");
-  
+  await reply("🔍 *Buscando música...*");
   try {
-    let url = query;
+    let url = "";
     let videoTitle = "";
     let videoDuration = 0;
-    
-    // Verificar se é link do YouTube
+
     if (query.includes("youtube.com/watch?v=") || query.includes("youtu.be/")) {
-      // Extrair ID do vídeo
-      let videoId = "";
-      if (query.includes("youtu.be/")) {
-        videoId = query.split("youtu.be/")[1].split("?")[0];
-      } else {
-        videoId = query.split("v=")[1]?.split("&")[0];
-      }
-      url = `https://youtube.com/watch?v=${videoId}`;
-      
-      // Obter informações diretamente
-      const infoCmd = `yt-dlp --remote-components ejs:github --dump-json --skip-download "${url}" 2>/dev/null`;
-      const infoOut = await execPromise(infoCmd);
-      const info = JSON.parse(infoOut.stdout);
+      let videoId = query.includes("youtu.be/")
+        ? query.split("youtu.be/")[1].split("?")[0]
+        : query.split("v=")[1]?.split("&")[0];
+      url = "https://youtube.com/watch?v=" + videoId;
+      const info = JSON.parse(await runCmd(`yt-dlp --dump-json --skip-download "${url}"`));
       videoTitle = info.title;
       videoDuration = info.duration;
     } else {
-      // Buscar usando yt-dlp (mais inteligente)
-      const searchCmd = `yt-dlp --remote-components ejs:github --dump-json --flat-playlist --limit 1 "ytsearch1:${query}" 2>/dev/null`;
-      const searchOut = await execPromise(searchCmd);
-      const searchResult = JSON.parse(searchOut.stdout);
-      
-      if (!searchResult || !searchResult.id) {
-        // Tentativa 2: Buscar com palavras-chave diferentes
-        const fallbackCmd = `yt-dlp --remote-components ejs:github --dump-json --flat-playlist --limit 1 "ytsearch1:${query} song audio" 2>/dev/null`;
-        const fallbackOut = await execPromise(fallbackCmd);
-        const fallbackResult = JSON.parse(fallbackOut.stdout);
-        if (!fallbackResult || !fallbackResult.id) {
-          return reply("❌ *Não encontrei essa música!*\n\n_Tente:\n• Nome mais específico\n• Link direto do YouTube\n• Artista + nome da música_");
-        }
-        videoTitle = fallbackResult.title;
-        videoDuration = fallbackResult.duration || 0;
-        url = `https://youtube.com/watch?v=${fallbackResult.id}`;
-      } else {
-        videoTitle = searchResult.title;
-        videoDuration = searchResult.duration || 0;
-        url = `https://youtube.com/watch?v=${searchResult.id}`;
-      }
+      const out = await runCmd(`yt-dlp --dump-json --flat-playlist --playlist-end 1 "ytsearch1:${query}"`);
+      const result = JSON.parse(out.split("\n")[0]);
+      if (!result?.id) return reply("❌ Música não encontrada!");
+      videoTitle = result.title;
+      videoDuration = result.duration || 0;
+      url = "https://youtube.com/watch?v=" + result.id;
     }
-    
-    // Verificar duração (ignorar se não detectada)
-    if (videoDuration && videoDuration > 0 && videoDuration < 86400) {
-      if (videoDuration > 600) {
-        return reply(`❌ Música muito longa (${Math.floor(videoDuration/60)}min)\n_Máximo: 10 minutos_\n\n🎵 *${videoTitle.substring(0, 50)}*`);
-      }
-    }
-    
-    await reply(`🎵 *${videoTitle.substring(0, 45)}*\n⏱️ Duração: ${formatDuration(videoDuration)}\n⬇️ *Baixando áudio...*`);
-    
-    // Baixar com qualidade otimizada
-    const outFile = path.join(TEMP_DIR, `audio_${Date.now()}.mp3`);
-    const downloadCmd = `yt-dlp --remote-components ejs:github -f "bestaudio[ext=webm]/bestaudio" --extract-audio --audio-format mp3 --audio-quality 64K -o "${outFile.replace(".mp3", ".%(ext)s")}" "${url}"`;
-    
-    await runCmd(downloadCmd, 120000);
-    
-    // Encontrar o arquivo baixado
-    const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("audio_") && (f.endsWith(".mp3") || f.endsWith(".m4a") || f.endsWith(".webm")));
+
+    if (videoDuration > 600) return reply(`❌ Música muito longa (${Math.floor(videoDuration/60)}min)\n_Máximo: 10 minutos_`);
+
+    await reply(`🎵 *${videoTitle.substring(0, 50)}*\n⏱️ ${formatDuration(videoDuration)}\n⬇️ Baixando...`);
+
+    const outBase = path.join(TEMP_DIR, "audio_" + Date.now());
+    await runCmd(`yt-dlp -f "bestaudio" --extract-audio --audio-format mp3 --audio-quality 64K -o "${outBase}.%(ext)s" "${url}"`, 120000);
+
+    const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("audio_"));
     const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
-    
-    if (!file || !fs.existsSync(file)) return reply("❌ *Erro ao baixar o áudio!*\n_Tente outro nome ou link direto._");
-    
+    if (!file) return reply("❌ Erro ao baixar!");
+
     const buffer = fs.readFileSync(file);
     fs.unlinkSync(file);
-    
-    if (buffer.length < 1000) return reply("❌ Arquivo inválido ou corrompido!");
     if (buffer.length > 16 * 1024 * 1024) return reply("❌ Áudio muito grande (máx 16MB)");
-    
+
     await sendWithRetry(sock, from, {
       audio: buffer,
       mimetype: "audio/mpeg",
       fileName: videoTitle.substring(0, 50).replace(/[^\w\s]/gi, "") + ".mp3",
       ptt: false
     });
-    
-    await reply(`✅ *Enviado!*\n🎵 ${videoTitle.substring(0, 40)}`);
     cleanTemp();
-    
-  } catch (e) { 
-    console.error("Erro no play:", e.message);
-    cleanTemp();
-    
-    // Mensagem de erro amigável
-    if (e.message.includes("browseId")) {
-      return reply("❌ *Erro de busca!*\n\n_Tente:\n• Link direto do YouTube\n• Nome mais popular da música\n• Artista + nome da música_\n\nEx: .play Marília Mendonça Supera");
-    }
-    return reply("❌ *Erro ao baixar:* " + e.message.slice(0, 150) + "\n\n_Tente usar um link direto do YouTube._");
-  }
-}
-
-// ── PLAYVID (YouTube MP4) ─────────────────────────────────────
-async function playvid(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
-  if (!args.length) return reply("❌ Use: .playvid Nome do vídeo ou link");
-  
-  const query = args.join(" ");
-  await reply("🔍 *Buscando vídeo...*");
-  
-  try {
-    let url = query;
-    let videoTitle = "";
-    let videoDuration = 0;
-    
-    if (query.includes("youtube.com/watch?v=") || query.includes("youtu.be/")) {
-      let videoId = "";
-      if (query.includes("youtu.be/")) {
-        videoId = query.split("youtu.be/")[1].split("?")[0];
-      } else {
-        videoId = query.split("v=")[1]?.split("&")[0];
-      }
-      url = `https://youtube.com/watch?v=${videoId}`;
-      
-      const infoCmd = `yt-dlp --remote-components ejs:github --dump-json --skip-download "${url}" 2>/dev/null`;
-      const infoOut = await execPromise(infoCmd);
-      const info = JSON.parse(infoOut.stdout);
-      videoTitle = info.title;
-      videoDuration = info.duration;
-    } else {
-      const searchCmd = `yt-dlp --remote-components ejs:github --dump-json --flat-playlist --limit 1 "ytsearch1:${query} video" 2>/dev/null`;
-      const searchOut = await execPromise(searchCmd);
-      const searchResult = JSON.parse(searchOut.stdout);
-      if (!searchResult || !searchResult.id) return reply("❌ Vídeo não encontrado!");
-      videoTitle = searchResult.title;
-      videoDuration = searchResult.duration || 0;
-      url = `https://youtube.com/watch?v=${searchResult.id}`;
-    }
-    
-    if (videoDuration > 0 && videoDuration > 300) {
-      return reply(`❌ Vídeo muito longo (${Math.floor(videoDuration/60)}min)\n_Máximo: 5 minutos_`);
-    }
-    
-    await reply(`🎬 *${videoTitle.substring(0, 45)}*\n⬇️ Baixando vídeo...`);
-    
-    const outFile = path.join(TEMP_DIR, `video_${Date.now()}.mp4`);
-    const downloadCmd = `yt-dlp --remote-components ejs:github -f "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]" --merge-output-format mp4 -o "${outFile}" "${url}"`;
-    
-    await runCmd(downloadCmd, 120000);
-    
-    if (!fs.existsSync(outFile)) return reply("❌ Erro ao baixar o vídeo!");
-    
-    const buffer = fs.readFileSync(outFile);
-    fs.unlinkSync(outFile);
-    
-    if (buffer.length < 1000) return reply("❌ Arquivo inválido!");
-    if (buffer.length > 25 * 1024 * 1024) return reply("❌ Vídeo muito grande (máx 25MB)");
-    
-    await sendWithRetry(sock, from, {
-      video: buffer,
-      mimetype: "video/mp4",
-      fileName: videoTitle.substring(0, 40).replace(/[^\w\s]/gi, "") + ".mp4",
-      caption: `🎬 *${videoTitle.substring(0, 40)}*`
-    });
-    
-    await reply("✅ Vídeo enviado!");
-    cleanTemp();
-    
   } catch (e) {
-    console.error("Erro no playvid:", e.message);
     cleanTemp();
     return reply("❌ Erro: " + e.message.slice(0, 100));
   }
 }
 
-// ── YOUTUBE (busca múltipla) ──────────────────────────────────
+// ── PLAYVID ───────────────────────────────────────────────────
+async function playvid(ctx) {
+  const { args, reply, sock, from } = ctx;
+  if (!args.length) return reply("❌ Use: .playvid Nome do vídeo ou link");
+  const query = args.join(" ");
+  await reply("🔍 *Buscando vídeo...*");
+  try {
+    let url = "";
+    let videoTitle = "";
+    let videoDuration = 0;
+
+    if (query.includes("youtube.com/watch?v=") || query.includes("youtu.be/")) {
+      let videoId = query.includes("youtu.be/")
+        ? query.split("youtu.be/")[1].split("?")[0]
+        : query.split("v=")[1]?.split("&")[0];
+      url = "https://youtube.com/watch?v=" + videoId;
+      const info = JSON.parse(await runCmd(`yt-dlp --dump-json --skip-download "${url}"`));
+      videoTitle = info.title;
+      videoDuration = info.duration;
+    } else {
+      const out = await runCmd(`yt-dlp --dump-json --flat-playlist --playlist-end 1 "ytsearch1:${query} video"`);
+      const result = JSON.parse(out.split("\n")[0]);
+      if (!result?.id) return reply("❌ Vídeo não encontrado!");
+      videoTitle = result.title;
+      videoDuration = result.duration || 0;
+      url = "https://youtube.com/watch?v=" + result.id;
+    }
+
+    if (videoDuration > 300) return reply(`❌ Vídeo muito longo (${Math.floor(videoDuration/60)}min)\n_Máximo: 5 minutos_`);
+
+    await reply(`🎬 *${videoTitle.substring(0, 50)}*\n⬇️ Baixando...`);
+
+    const outFile = path.join(TEMP_DIR, "video_" + Date.now() + ".mp4");
+    await runCmd(`yt-dlp -f "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]" --merge-output-format mp4 -o "${outFile}" "${url}"`, 120000);
+
+    if (!fs.existsSync(outFile)) return reply("❌ Erro ao baixar!");
+    const buffer = fs.readFileSync(outFile);
+    fs.unlinkSync(outFile);
+    if (buffer.length > 25 * 1024 * 1024) return reply("❌ Vídeo muito grande (máx 25MB)");
+
+    await sendWithRetry(sock, from, {
+      video: buffer,
+      mimetype: "video/mp4",
+      caption: "🎬 *" + videoTitle.substring(0, 40) + "*"
+    });
+    cleanTemp();
+  } catch (e) {
+    cleanTemp();
+    return reply("❌ Erro: " + e.message.slice(0, 100));
+  }
+}
+
+// ── YOUTUBE (busca) ───────────────────────────────────────────
 async function youtube(ctx) {
   const { args, reply } = ctx;
   const query = args.join(" ");
   if (!query) return reply("❌ Use: .youtube <busca>");
-  
   await reply("🔍 *Buscando...*");
-  
   try {
-    const searchCmd = `yt-dlp --remote-components ejs:github --dump-json --flat-playlist --limit 8 "ytsearch8:${query}" 2>/dev/null`;
-    const { stdout } = await execPromise(searchCmd);
-    
+    const out = await runCmd(`yt-dlp --dump-json --flat-playlist --playlist-end 8 "ytsearch8:${query}"`);
     const results = [];
-    const lines = stdout.trim().split('\n');
-    
-    for (const line of lines) {
+    for (const line of out.split("\n")) {
       try {
-        const data = JSON.parse(line);
-        results.push({
-          title: data.title,
-          duration: data.duration ? formatDuration(data.duration) : "?",
-          url: `https://youtube.com/watch?v=${data.id}`
-        });
-      } catch (e) {}
+        const d = JSON.parse(line);
+        results.push({ title: d.title, duration: formatDuration(d.duration), url: "https://youtube.com/watch?v=" + d.id });
+      } catch (_) {}
     }
-    
-    if (results.length === 0) return reply("❌ Nenhum resultado encontrado!");
-    
-    let replyText = `🎬 *RESULTADOS PARA: ${query}*\n\n`;
+    if (!results.length) return reply("❌ Nenhum resultado!");
+    let text = "🎬 *RESULTADOS: " + query + "*\n\n";
     results.forEach((r, i) => {
-      replyText += `${i+1}. *${r.title.substring(0, 50)}*\n⏱️ ${r.duration}\n🔗 ${r.url}\n\n`;
+      text += `${i+1}. *${r.title.substring(0, 50)}*\n⏱️ ${r.duration}\n🔗 ${r.url}\n\n`;
     });
-    replyText += `💡 Use *.play* + número ou *.play* + link`;
-    
-    await reply(replyText);
+    return reply(text);
   } catch (e) {
-    return reply("❌ Erro na busca: " + e.message.slice(0, 100));
+    return reply("❌ Erro: " + e.message.slice(0, 100));
   }
 }
 
 // ── TIKTOK ────────────────────────────────────────────────────
 async function tiktok(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
+  const { args, reply, sock, from } = ctx;
   const url = args[0];
-  if (!url) return reply("❌ Use: .tiktok <link do TikTok>");
+  if (!url) return reply("❌ Use: .tiktok <link>");
   await reply("⏳ Baixando TikTok...");
   try {
     const outFile = path.join(TEMP_DIR, "tiktok_" + Date.now() + ".mp4");
-    await runCmd(`yt-dlp --remote-components ejs:github -f "best[height<=720]" -o "${outFile}" "${url}"`, 60000);
-    if (!fs.existsSync(outFile)) return reply("❌ Não foi possível baixar!");
+    await runCmd(`yt-dlp -f "best[height<=720]" -o "${outFile}" "${url}"`, 60000);
+    if (!fs.existsSync(outFile)) return reply("❌ Erro!");
     const buffer = fs.readFileSync(outFile);
     fs.unlinkSync(outFile);
     if (buffer.length > 25 * 1024 * 1024) return reply("❌ Vídeo muito grande!");
@@ -332,35 +217,31 @@ async function tiktok(ctx) {
   } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
-// ── Demais funções ───────────────────────────────────────────
+// ── INSTAGRAM ─────────────────────────────────────────────────
 async function instagram(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
+  const { args, reply, sock, from } = ctx;
   const url = args[0];
   if (!url) return reply("❌ Use: .instagram <link>");
   await reply("⏳ Baixando...");
   try {
     const outFile = path.join(TEMP_DIR, "insta_" + Date.now() + ".mp4");
-    await runCmd(`yt-dlp --remote-components ejs:github -o "${outFile}" "${url}"`, 60000);
+    await runCmd(`yt-dlp -o "${outFile}" "${url}"`, 60000);
     if (!fs.existsSync(outFile)) return reply("❌ Erro!");
     const buffer = fs.readFileSync(outFile);
     fs.unlinkSync(outFile);
-    const isVideo = buffer.length > 500000;
-    await sendWithRetry(sock, from, {
-      [isVideo ? "video" : "image"]: buffer,
-      mimetype: isVideo ? "video/mp4" : "image/jpeg",
-      caption: "📸 *Lutchi Zap Hack*"
-    });
+    await sendWithRetry(sock, from, { video: buffer, mimetype: "video/mp4", caption: "📸 *Instagram*" });
   } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
+// ── FACEBOOK ──────────────────────────────────────────────────
 async function facebook(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
+  const { args, reply, sock, from } = ctx;
   const url = args[0];
   if (!url) return reply("❌ Use: .facebook <link>");
   await reply("⏳ Baixando...");
   try {
     const outFile = path.join(TEMP_DIR, "fb_" + Date.now() + ".mp4");
-    await runCmd(`yt-dlp --remote-components ejs:github -o "${outFile}" "${url}"`, 60000);
+    await runCmd(`yt-dlp -o "${outFile}" "${url}"`, 60000);
     if (!fs.existsSync(outFile)) return reply("❌ Erro!");
     const buffer = fs.readFileSync(outFile);
     fs.unlinkSync(outFile);
@@ -368,14 +249,15 @@ async function facebook(ctx) {
   } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
+// ── KWAI ──────────────────────────────────────────────────────
 async function kwai(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
+  const { args, reply, sock, from } = ctx;
   const url = args[0];
   if (!url) return reply("❌ Use: .kwai <link>");
   await reply("⏳ Baixando...");
   try {
     const outFile = path.join(TEMP_DIR, "kwai_" + Date.now() + ".mp4");
-    await runCmd(`yt-dlp --remote-components ejs:github -o "${outFile}" "${url}"`, 60000);
+    await runCmd(`yt-dlp -o "${outFile}" "${url}"`, 60000);
     if (!fs.existsSync(outFile)) return reply("❌ Erro!");
     const buffer = fs.readFileSync(outFile);
     fs.unlinkSync(outFile);
@@ -383,30 +265,32 @@ async function kwai(ctx) {
   } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
+// ── SPOTIFY ───────────────────────────────────────────────────
 async function spotify(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
+  const { args, reply } = ctx;
   const url = args[0];
   if (!url) return reply("❌ Use: .spotify <link>");
   await reply("⏳ Processando Spotify...");
   try {
     const r = await axios.get("https://api.song.link/v1-alpha.1/links?url=" + encodeURIComponent(url), { timeout: 15000 });
-    const title = r.data?.entitiesByUniqueId?.[r.data?.entityUniqueId]?.title || "";
-    const artist = r.data?.entitiesByUniqueId?.[r.data?.entityUniqueId]?.artistName || "";
+    const entity = r.data?.entitiesByUniqueId?.[r.data?.entityUniqueId];
+    const title  = entity?.title || "";
+    const artist = entity?.artistName || "";
     if (!title) return reply("❌ Não consegui identificar!");
-    await reply(`🎵 *${title}* - ${artist}\n⬇️ Buscando no YouTube...`);
-    const playCtx = { ...ctx, args: [`${artist} ${title}`] };
-    await play(playCtx);
+    await reply("🎵 *" + title + "* — " + artist + "\n⬇️ Buscando no YouTube...");
+    await play({ ...ctx, args: [artist + " " + title] });
   } catch (e) { return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
+// ── SOUNDCLOUD ────────────────────────────────────────────────
 async function soundcloud(ctx) {
-  const { args, reply, sock, from, msg } = ctx;
+  const { args, reply, sock, from } = ctx;
   const url = args[0];
   if (!url) return reply("❌ Use: .soundcloud <link>");
   await reply("⏳ Baixando...");
   try {
-    const outFile = path.join(TEMP_DIR, "sc_" + Date.now() + ".mp3");
-    await runCmd(`yt-dlp --remote-components ejs:github -f bestaudio[ext=webm]/bestaudio --extract-audio --audio-format mp3 --audio-quality 64K -o "${outFile.replace(".mp3", ".%(ext)s")}" "${url}"`, 90000);
+    const outBase = path.join(TEMP_DIR, "sc_" + Date.now());
+    await runCmd(`yt-dlp -f bestaudio --extract-audio --audio-format mp3 --audio-quality 64K -o "${outBase}.%(ext)s" "${url}"`, 90000);
     const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("sc_"));
     const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
     if (!file) return reply("❌ Erro!");
@@ -416,6 +300,7 @@ async function soundcloud(ctx) {
   } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
+// ── MEDIAFIRE ─────────────────────────────────────────────────
 async function mediafire(ctx) {
   const { args, reply } = ctx;
   const url = args[0];
@@ -428,6 +313,7 @@ async function mediafire(ctx) {
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
+// ── TOMP3 ─────────────────────────────────────────────────────
 async function tomp3(ctx) {
   const { msg, reply, sock, from } = ctx;
   const m = msg.message;
@@ -441,6 +327,7 @@ async function tomp3(ctx) {
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
+// ── REVELARFT ─────────────────────────────────────────────────
 async function revelarft(ctx) {
   const { msg, reply, sock, from, isAdmin, isOwner } = ctx;
   if (!isAdmin && !isOwner) return reply("❌ Apenas administradores!");
@@ -463,6 +350,7 @@ async function revelarft(ctx) {
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
+// ── CLONAR ────────────────────────────────────────────────────
 async function clonar(ctx) {
   const { sock, from, args, reply, isAdmin, isOwner } = ctx;
   if (!isAdmin && !isOwner) return reply("❌ Apenas administradores!");
@@ -476,7 +364,7 @@ async function clonar(ctx) {
     }
     const info = await sock.groupGetInviteInfo(code).catch(() => null);
     if (!info) return reply("❌ Link inválido!");
-    await reply(`📋 Grupo: *${info.subject}*\n👥 ${info.size} membros`);
+    await reply("📋 Grupo: *" + info.subject + "*\n👥 " + info.size + " membros");
     let meta = await sock.groupMetadata(info.id).catch(() => null);
     if (!meta) {
       await sock.groupAcceptInvite(code);
@@ -487,15 +375,121 @@ async function clonar(ctx) {
     const members = meta.participants.map(p => p.id).filter(id => !id.includes(botNum));
     let adicionados = 0, falhos = 0;
     for (const jid of members) {
-      try { await sock.groupParticipantsUpdate(from, [jid], "add"); adicionados++; } catch (_) { falhos++; }
-      await new Promise(r => setTimeout(r, 3000));
+      try {
+        await sock.groupParticipantsUpdate(from, [jid], "add");
+        adicionados++;
+        await new Promise(r => setTimeout(r, 1500));
+      } catch (_) { falhos++; }
     }
-    return reply(`✅ *CLONADO!*\n✅ Adicionados: ${adicionados}\n❌ Falhos: ${falhos}`);
+    return reply("✅ *Clonagem concluída!*\n\n✅ Adicionados: " + adicionados + "\n❌ Falhos: " + falhos);
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
-async function shazam(ctx) {
-  return ctx.reply("⚠️ Comando em desenvolvimento.");
+// ── WALLPAPER ─────────────────────────────────────────────────
+async function wallpaper(ctx) {
+  const { args, reply, sock, from, msg } = ctx;
+  const query = args.join(" ");
+  if (!query) return reply("❌ Use: .wallpaper <tema>");
+  await reply("🖼️ Buscando wallpaper de *" + query + "*...");
+  try {
+    const r = await axios.get(
+      "https://api.unsplash.com/photos/random?query=" + encodeURIComponent(query) + "&client_id=your_unsplash_key",
+      { timeout: 10000 }
+    );
+    const url = r.data?.urls?.regular;
+    if (!url) return reply("❌ Sem resultado!");
+    const buffer = await dlBuffer(url);
+    await sock.sendMessage(from, { image: buffer, caption: "🖼️ *" + query + "*" }, { quoted: msg });
+  } catch (e) { return reply("❌ Erro: " + e.message.slice(0, 100)); }
 }
 
-module.exports = { play, playvid, youtube, tiktok, instagram, facebook, kwai, spotify, soundcloud, mediafire, tomp3, revelarft, clonar, shazam };
+// ── SHAZAM ────────────────────────────────────────────────────
+async function shazam(ctx) {
+  const { msg, reply } = ctx;
+  return reply("🎵 *Shazam* em desenvolvimento!\n_Em breve disponível._");
+}
+
+// ── TTS ───────────────────────────────────────────────────────
+async function tts(ctx) {
+  const { args, reply, sock, from, msg } = ctx;
+  const texto = args.join(" ");
+  if (!texto) return reply("❌ Use: .tts <texto>");
+  try {
+    const url = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(texto) + "&tl=pt&client=tw-ob";
+    const buffer = await dlBuffer(url);
+    await sock.sendMessage(from, { audio: buffer, mimetype: "audio/mpeg", ptt: true }, { quoted: msg });
+  } catch (e) { return reply("❌ Erro: " + e.message); }
+}
+
+// ── TIKTOKMP3 ─────────────────────────────────────────────────
+async function tiktokmp3(ctx) {
+  const { args, reply, sock, from } = ctx;
+  const url = args[0];
+  if (!url) return reply("❌ Use: .tiktokmp3 <link>");
+  await reply("⏳ Extraindo áudio do TikTok...");
+  try {
+    const outBase = path.join(TEMP_DIR, "tiktokmp3_" + Date.now());
+    await runCmd(`yt-dlp -f bestaudio --extract-audio --audio-format mp3 -o "${outBase}.%(ext)s" "${url}"`, 60000);
+    const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("tiktokmp3_"));
+    const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+    if (!file) return reply("❌ Erro!");
+    const buffer = fs.readFileSync(file);
+    fs.unlinkSync(file);
+    await sendWithRetry(sock, from, { audio: buffer, mimetype: "audio/mpeg" });
+  } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
+}
+
+// ── TWITTER ───────────────────────────────────────────────────
+async function twitter(ctx) {
+  const { args, reply, sock, from } = ctx;
+  const url = args[0];
+  if (!url) return reply("❌ Use: .twitter <link>");
+  await reply("⏳ Baixando...");
+  try {
+    const outFile = path.join(TEMP_DIR, "tw_" + Date.now() + ".mp4");
+    await runCmd(`yt-dlp -o "${outFile}" "${url}"`, 60000);
+    if (!fs.existsSync(outFile)) return reply("❌ Erro!");
+    const buffer = fs.readFileSync(outFile);
+    fs.unlinkSync(outFile);
+    await sendWithRetry(sock, from, { video: buffer, mimetype: "video/mp4", caption: "🐦 *Twitter/X*" });
+  } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
+}
+
+// ── PINTEREST ─────────────────────────────────────────────────
+async function pinterest(ctx) {
+  const { args, reply, sock, from, msg } = ctx;
+  const url = args[0];
+  if (!url) return reply("❌ Use: .pinterest <link>");
+  await reply("⏳ Baixando...");
+  try {
+    const outFile = path.join(TEMP_DIR, "pin_" + Date.now() + ".jpg");
+    await runCmd(`yt-dlp -o "${outFile}" "${url}"`, 30000);
+    if (!fs.existsSync(outFile)) return reply("❌ Erro!");
+    const buffer = fs.readFileSync(outFile);
+    fs.unlinkSync(outFile);
+    await sock.sendMessage(from, { image: buffer, caption: "📌 *Pinterest*" }, { quoted: msg });
+  } catch (e) { cleanTemp(); return reply("❌ Erro: " + e.message.slice(0, 100)); }
+}
+
+// ── SPOTIFYSEARCH ─────────────────────────────────────────────
+async function spotifysearch(ctx) {
+  const { args, reply } = ctx;
+  const query = args.join(" ");
+  if (!query) return reply("❌ Use: .spotifysearch <nome>");
+  try {
+    const r = await axios.get("https://api.agatz.xyz/api/spotify?text=" + encodeURIComponent(query), { timeout: 15000 });
+    const data = r.data?.data;
+    if (!data) return reply("❌ Sem resultado!");
+    return reply("🎵 *Resultados Spotify:*\n\n" + JSON.stringify(data).slice(0, 500));
+  } catch (e) { return reply("❌ Erro: " + e.message); }
+}
+
+module.exports = {
+  play, playvid, youtube,
+  tiktok, tiktokmp3,
+  instagram, facebook, twitter, kwai,
+  spotify, spotifysearch, soundcloud,
+  mediafire, pinterest,
+  tomp3, tts, revelarft,
+  clonar, shazam, wallpaper,
+};

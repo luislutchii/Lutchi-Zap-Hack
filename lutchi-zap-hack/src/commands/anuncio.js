@@ -11,21 +11,32 @@ const ANUNCIO_TEXT =
   "━━━━━━━━━━━━━━━━━━━━━\n" +
   "🌐 github.com/luislutchii/Lutchi-Zap-Hack";
 
-// Controlo por grupo — ativo por padrão
-const anuncioStatus = new Map(); // groupId -> false (desativado)
-const anuncioTimers = new Map(); // groupId -> intervalId
+const anuncioStatus = new Map();
+const anuncioTimers = new Map();
 
-// Inicia o anúncio num grupo
+// Envia anúncio com menção silenciosa (sem listar nomes)
+async function enviarAnuncio(sock, groupId) {
+  try {
+    const meta = await sock.groupMetadata(groupId).catch(() => null);
+    const mentions = meta ? meta.participants.map(p => p.id) : [];
+    await sock.sendMessage(groupId, {
+      text: ANUNCIO_TEXT,
+      mentions, // menção silenciosa — notifica sem listar
+    });
+  } catch (_) {}
+}
+
 function iniciarAnuncio(sock, groupId) {
-  if (anuncioTimers.has(groupId)) return; // já está a correr
-  const interval = setInterval(async () => {
+  if (anuncioTimers.has(groupId)) return;
+  // Envia imediatamente ao iniciar
+  enviarAnuncio(sock, groupId);
+  const interval = setInterval(() => {
     if (anuncioStatus.get(groupId) === false) return;
-    await sock.sendMessage(groupId, { text: ANUNCIO_TEXT }).catch(() => {});
-  }, 30 * 60 * 1000); // 30 minutos
+    enviarAnuncio(sock, groupId);
+  }, 30 * 60 * 1000);
   anuncioTimers.set(groupId, interval);
 }
 
-// Para o anúncio num grupo
 function pararAnuncio(groupId) {
   const interval = anuncioTimers.get(groupId);
   if (interval) {
@@ -34,7 +45,6 @@ function pararAnuncio(groupId) {
   }
 }
 
-// Inicia anúncios em todos os grupos ao ligar o bot
 async function iniciarAnunciosTodos(sock) {
   try {
     const grupos = await sock.groupFetchAllParticipating();
@@ -49,7 +59,6 @@ async function iniciarAnunciosTodos(sock) {
   }
 }
 
-// Comando .anuncio — ver status ou ligar/desligar
 async function anuncio(ctx) {
   const { from, args, reply, isOwner, sock, isGroup } = ctx;
   if (!isGroup) return reply("❌ Apenas em grupos!");
@@ -72,17 +81,17 @@ async function anuncio(ctx) {
   if (option === "off") {
     anuncioStatus.set(from, false);
     pararAnuncio(from);
-    return reply("📢 *Anúncio desativado!* ❌\n_O anúncio não será mais enviado neste grupo._");
+    return reply("📢 *Anúncio desativado!* ❌");
   }
 
   if (option === "on") {
     anuncioStatus.set(from, true);
     iniciarAnuncio(sock, from);
-    return reply("📢 *Anúncio ativado!* ✅\n_Será enviado a cada 30 minutos._");
+    return reply("📢 *Anúncio ativado!* ✅\n_Enviado a cada 30 minutos com menção silenciosa._");
   }
 
   if (option === "agora") {
-    await sock.sendMessage(from, { text: ANUNCIO_TEXT });
+    await enviarAnuncio(sock, from);
     return reply("✅ Anúncio enviado!");
   }
 
