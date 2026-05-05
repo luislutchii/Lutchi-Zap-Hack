@@ -3,7 +3,6 @@ const ffmpeg  = require("fluent-ffmpeg");
 const fs      = require("fs");
 const path    = require("path");
 const os      = require("os");
-const webp    = require("node-webpmux");
 const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 const p = ".";
 
@@ -48,38 +47,68 @@ function convertToWebP(inputBuffer, isVideo = false) {
   });
 }
 
-// ── Injeta metadados EXIF no WebP ────────────────────────────
-async function addStickerMeta(buffer, pack, author) {
+// ── Injeta EXIF no WebP sem libs externas ────────────────────
+function addExifToWebP(webpBuffer, packName, authorName) {
   try {
-    const img = new webp.Image();
-    const json = {
+    const json = JSON.stringify({
       "sticker-pack-id":        "com.lutchi.zaphack",
-      "sticker-pack-name":      pack,
-      "sticker-pack-publisher": author,
-      "emojis":                 ["🤖"],
-    };
-    const exifAttr  = Buffer.from([0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x41, 0x57, 0x07, 0x00]);
-    const jsonBuf   = Buffer.from(JSON.stringify(json), "utf8");
-    const exifValue = Buffer.concat([exifAttr, jsonBuf]);
-    await img.load(buffer);
-    img.exif = exifValue;
-    return await img.save(null);
+      "sticker-pack-name":      packName,
+      "sticker-pack-publisher": authorName,
+      "emojis": ["🤖"],
+    });
+
+    const jsonBuf = Buffer.from(json, "utf8");
+
+    // EXIF header (TIFF little-endian + tag para UserComment)
+    const exifHeader = Buffer.from([
+      0x45, 0x78, 0x69, 0x66, 0x00, 0x00, // "Exif\0\0"
+      0x49, 0x49, 0x2A, 0x00,             // TIFF LE magic
+      0x08, 0x00, 0x00, 0x00,             // offset to IFD
+      0x01, 0x00,                          // 1 entry
+      0x10, 0x9C,                          // tag: UserComment (0x9C10 LE)
+      0x02, 0x00,                          // type: ASCII
+    ]);
+
+    const lenBuf = Buffer.alloc(4);
+    lenBuf.writeUInt32LE(jsonBuf.length, 0);
+
+    const offsetBuf = Buffer.from([0x1A, 0x00, 0x00, 0x00]); // offset após IFD
+    const nextIFD   = Buffer.from([0x00, 0x00, 0x00, 0x00]); // no next IFD
+
+    const exifData = Buffer.concat([exifHeader, lenBuf, offsetBuf, nextIFD, jsonBuf]);
+
+    // Constrói chunk EXIF para WebP
+    const chunkId   = Buffer.from("EXIF");
+    const chunkSize = Buffer.alloc(4);
+    chunkSize.writeUInt32LE(exifData.length, 0);
+    const exifChunk = Buffer.concat([chunkId, chunkSize, exifData]);
+
+    // Verifica se é WebP válido (RIFF....WEBP)
+    if (
+      webpBuffer.slice(0, 4).toString() !== "RIFF" ||
+      webpBuffer.slice(8, 12).toString() !== "WEBP"
+    ) {
+      return webpBuffer; // retorna original se não for WebP
+    }
+
+    // Actualiza o tamanho RIFF e insere chunk EXIF antes do fim
+    const riffSize = webpBuffer.readUInt32LE(4);
+    const newSize  = riffSize + exifChunk.length;
+    const newRiff  = Buffer.from(webpBuffer);
+    newRiff.writeUInt32LE(newSize, 4);
+
+    return Buffer.concat([newRiff, exifChunk]);
   } catch (e) {
     console.error("[EXIF]", e.message);
-    return buffer;
+    return webpBuffer;
   }
 }
 
-// ── Lê metadados EXIF do WebP ────────────────────────────────
-async function readStickerMeta(buffer) {
+// ── Lê EXIF do WebP ──────────────────────────────────────────
+function readExifFromWebP(buffer) {
   try {
-    const img = new webp.Image();
-    await img.load(buffer);
-    if (!img.exif) return null;
-    const exif = img.exif;
-    // Procura o JSON dentro do EXIF
-    const str   = exif.toString("binary");
-    const start = str.indexOf('{"');
+    const str   = buffer.toString("binary");
+    const start = str.indexOf('{"sticker');
     const end   = str.lastIndexOf("}");
     if (start === -1 || end === -1) return null;
     return JSON.parse(Buffer.from(str.slice(start, end + 1), "binary").toString("utf8"));
@@ -87,7 +116,7 @@ async function readStickerMeta(buffer) {
 }
 
 async function sendSticker(sock, from, msg, buffer) {
-  const finalBuffer = await addStickerMeta(buffer, STICKER_PACK, STICKER_AUTHOR);
+  const finalBuffer = addExifToWebP(buffer, STICKER_PACK, STICKER_AUTHOR);
   await sock.sendMessage(from, { sticker: finalBuffer }, { quoted: msg });
 }
 
@@ -271,14 +300,11 @@ async function stickerinfo(ctx) {
     const quoted     = m?.extendedTextMessage?.contextInfo?.quotedMessage;
     const stickerMsg = m?.stickerMessage || quoted?.stickerMessage;
     if (!stickerMsg) return reply("❌ Responda um sticker com *" + p + "stickerinfo*");
-
     const buffer = await downloadMedia(stickerMsg, "sticker");
-    const meta   = await readStickerMeta(buffer);
-
-    const pack  = meta?.["sticker-pack-name"]     || "Desconhecido";
-    const autor = meta?.["sticker-pack-publisher"] || "Desconhecido";
-    const anim  = stickerMsg?.isAnimated ? "Sim ✅" : "Nao ❌";
-
+    const meta   = readExifFromWebP(buffer);
+    const pack   = meta?.["sticker-pack-name"]     || "Desconhecido";
+    const autor  = meta?.["sticker-pack-publisher"] || "Desconhecido";
+    const anim   = stickerMsg?.isAnimated ? "Sim ✅" : "Nao ❌";
     return reply(
       "🎨 *INFO DO STICKER*\n\n" +
       "📦 *Pack:* " + pack + "\n" +
