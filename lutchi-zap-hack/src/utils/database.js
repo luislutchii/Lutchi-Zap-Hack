@@ -5,6 +5,7 @@ const DB_PATH = path.join(__dirname, "../../data/database.json");
 
 let db = {
   boasvindas: {},
+  antimentadmin: {},
   groups:      {},
   warnings:    {},
   muted:       {},
@@ -120,6 +121,15 @@ function setBoasVindas(groupId, status) { db.boasVindas[groupId] = status; saveD
 function getBoasVindas(groupId)         { return db.boasVindas[groupId] || false; } // padrão: desligado
 
 
+function setAntiMentAdmin(groupId, status) {
+  db.antimentadmin[groupId] = status;
+  saveDatabase();
+}
+
+function getAntiMentAdmin(groupId) {
+  return db.antimentadmin[groupId] || false;
+}
+
 function setBoasvindas(groupId, status) {
   db.boasvindas[groupId] = status;
   saveDatabase();
@@ -152,3 +162,9 @@ function getOwnerLid() {
 }
 
 module.exports = Object.assign(module.exports, { saveOwnerLid, getOwnerLid });
+
+// ── Anti-mention Admin ────────────────────────────────────────
+function setAntiMention(groupId, status) { db.antiMention = db.antiMention || {}; db.antiMention[groupId] = status; saveDatabase(); }
+function getAntiMention(groupId)         { return db.antiMention?.[groupId] || false; }
+
+module.exports = Object.assign(module.exports, { setAntiMention, getAntiMention });

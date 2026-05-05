@@ -1,30 +1,21 @@
-const config = require("../config/config");
-const { getAntiLink, getAntiFlood, getBanwords, isMuted } = require("./database");
 
-const infoCommands        = require("../commands/info");
-const adminCommands       = require("../commands/admin");
-const modCommands         = require("../commands/mod");
-const downloadCommands    = require("../commands/downloads");
-const stickerCommands     = require("../commands/stickers");
-const pesquisaCommands    = require("../commands/pesquisas");
+const config = require("../config/config");
+const { getAntiLink, getAntiFlood, getBanwords, isMuted, getAntiMentAdmin } = require("./database");
+
+const infoCommands     = require("../commands/info");
+const adminCommands    = require("../commands/admin");
+const modCommands      = require("../commands/mod");
+const downloadCommands = require("../commands/downloads");
+const stickerCommands  = require("../commands/stickers");
+const pesquisaCommands = require("../commands/pesquisas");
 const brincadeiraCommands = require("../commands/brincadeiras");
-const extrasCommands      = require("../commands/extras");
-const debateCommands    = require("../commands/debate");
-const ownerCommands       = require("../commands/owner");
+const ownerCommands    = require("../commands/owner");
 
 const floodTracker = {};
 
-const PUBLIC_COMMANDS = new Set([
-  "lutchi", "menu", "ping", "dono", "sobre",
-  "dado", "flip", "citar", "conselhos", "conselhobiblico",
-  "cantadas", "spoiler", "fazernick", "calcular",
-  "letramusica", "tabela", "signo", "obesidade",
-  "clima", "traduzir", "wikipedia", "dicionario",
-  "tinyurl", "googlesrc", "gimage", "wame", "sistema", "temadebate", "favor", "contra", "votos",
-]);
-
-function normalizeId(jid = "") {
-  return jid.replace(/:.*@/, "@").replace(/@.*/, "");
+function normalizeId(jid) {
+  if (!jid) return "";
+  return jid.replace(/:.*@/, "@").replace(/@.*/, "").trim();
 }
 
 function matchParticipant(participantId, phoneNum, lidNum) {
@@ -34,69 +25,36 @@ function matchParticipant(participantId, phoneNum, lidNum) {
 
 function checkIsOwner(sender, groupMeta) {
   const ownerPhone = config.owner.number;
+  const ownerLid   = config.owner.lid || "";
   const senderNorm = normalizeId(sender);
 
-  // Comparação direta com número de telefone
   if (senderNorm === ownerPhone) return true;
+  if (senderNorm === ownerLid)   return true;
   if (sender.includes(ownerPhone)) return true;
 
-  // Verificar via participantes do grupo (resolver LID -> número)
   if (groupMeta) {
     for (const p of groupMeta.participants) {
       const pPhone = normalizeId(p.id);
       const pLid   = p.lidJid ? normalizeId(p.lidJid) : null;
-
-      // O remetente é este participante? (por número ou por LID)
-      const isSender =
-        pPhone === senderNorm ||
-        (pLid && pLid === senderNorm) ||
-        p.id.includes(senderNorm) ||
-        (p.lidJid && p.lidJid.includes(senderNorm));
-
+      const isSender = pPhone === senderNorm || (pLid && pLid === senderNorm);
       if (isSender) {
-        // Este participante é o dono?
         if (pPhone === ownerPhone) return true;
         if (p.id.includes(ownerPhone)) return true;
       }
     }
   }
-
-  // Verificar LID do dono salvo no config
-  const ownerLid = config.owner.lid;
-  if (ownerLid && senderNorm === normalizeId(ownerLid)) return true;
-
-  // Verificar se o sender LID corresponde ao dono via sock.user
-  // O LID do dono é salvo no primeiro login
-  const ownerLidKey = 'ownerLid';
-  try {
-    const db = require('./database');
-    const savedLid = db.getOwnerLid ? db.getOwnerLid() : null;
-    if (savedLid && senderNorm === normalizeId(savedLid)) return true;
-  } catch (_) {}
-
   return false;
 }
 
-// Extrai o texto da mensagem em qualquer formato do Baileys
 function extractBody(msg) {
   const m = msg.message;
   if (!m) return "";
   return (
-    m?.conversation ||
-    m?.extendedTextMessage?.text ||
-    m?.imageMessage?.caption ||
-    m?.videoMessage?.caption ||
-    m?.documentMessage?.caption ||
-    m?.buttonsResponseMessage?.selectedButtonId ||
-    m?.listResponseMessage?.singleSelectReply?.selectedRowId ||
-    m?.templateButtonReplyMessage?.selectedId ||
-    m?.ephemeralMessage?.message?.conversation ||
-    m?.ephemeralMessage?.message?.extendedTextMessage?.text ||
-    m?.viewOnceMessage?.message?.conversation ||
-    m?.viewOnceMessage?.message?.extendedTextMessage?.text ||
-    m?.documentWithCaptionMessage?.message?.documentMessage?.caption ||
-    m?.editedMessage?.message?.protocolMessage?.editedMessage?.conversation ||
-    m?.editedMessage?.message?.protocolMessage?.editedMessage?.extendedTextMessage?.text ||
+    m.conversation ||
+    m.extendedTextMessage?.text ||
+    m.imageMessage?.caption ||
+    m.videoMessage?.caption ||
+    m.documentMessage?.caption ||
     ""
   );
 }
@@ -109,15 +67,17 @@ async function messageHandler(sock, msg, store) {
     const isGroup = msg.key.remoteJid.endsWith("@g.us");
     const from    = msg.key.remoteJid;
     const sender  = isGroup ? msg.key.participant || msg.key.remoteJid : msg.key.remoteJid;
+    const body    = extractBody(msg);
 
-    const body = extractBody(msg);
     if (!body.startsWith(config.prefix)) {
       if (isGroup) await passiveModeration(sock, msg, from, sender, body, messageContent);
       return;
     }
 
     const args    = body.slice(config.prefix.length).trim().split(/\s+/);
-    const command = args.shift().toLowerCase();
+    const command = args[0].toLowerCase();
+    args.shift();
+
     let groupMeta = null, isAdmin = false, isBotAdmin = false;
     if (isGroup) {
       groupMeta = await sock.groupMetadata(from).catch(() => null);
@@ -126,16 +86,15 @@ async function messageHandler(sock, msg, store) {
         const botPhone    = normalizeId(sock.user?.id ?? "");
         const senderLid   = normalizeId(msg.key?.participant ?? "");
         const botLid      = normalizeId(sock.user?.lid ?? "");
-        const admins      = groupMeta.participants.filter((p) => p.admin);
-        isAdmin    = admins.some((p) => matchParticipant(p.id, senderPhone, senderLid));
-        isBotAdmin = admins.some((p) => matchParticipant(p.id, botPhone, botLid));
+        const admins      = groupMeta.participants.filter(p => p.admin);
+        isAdmin    = admins.some(p => matchParticipant(p.id, senderPhone, senderLid));
+        isBotAdmin = admins.some(p => matchParticipant(p.id, botPhone, botLid));
       }
     }
 
-    const isOwner = checkIsOwner(sender, groupMeta);    if (isGroup && !isAdmin && !isOwner) {
-      if (!PUBLIC_COMMANDS.has(command)) {        return;
-      }
-    }
+    const isOwner = checkIsOwner(sender, groupMeta);
+
+    if (isGroup && !isAdmin && !isOwner) return;
 
     const ctx = {
       sock, msg, from, sender, args, body,
@@ -144,24 +103,14 @@ async function messageHandler(sock, msg, store) {
         sock.sendMessage(from, { text, ...opts }, { quoted: msg }),
     };
 
-    // Reage à mensagem para indicar que o bot recebeu
-    await sock.sendMessage(from, {
-      react: { text: "⏳", key: msg.key },
-    }).catch(() => {});
-
     await routeCommand(command, ctx);
   } catch (err) {
-    console.error("❌ Erro no handler:", err.message, err.stack);
+    console.error("❌ Erro no handler:", err.message);
   }
 }
 
-const debateAtivo = new Map();
-
 async function routeCommand(command, ctx) {
   const routes = {
-    ligarbot:        () => ownerCommands.ligarbot(ctx),
-    desligarbot:     () => ownerCommands.desligarbot(ctx),
-    modobot:         () => ownerCommands.modobot(ctx),
     lutchi:          () => infoCommands.lutchi(ctx),
     menu:            () => infoCommands.menu(ctx),
     ping:            () => infoCommands.ping(ctx),
@@ -169,7 +118,7 @@ async function routeCommand(command, ctx) {
     link:            () => infoCommands.link(ctx),
     regras:          () => infoCommands.regras(ctx),
     setregras:       () => infoCommands.setregras(ctx),
-    sticker:         () => stickerCommands.sticker(ctx),
+    sticker:         () => infoCommands.sticker(ctx),
     dono:            () => infoCommands.dono(ctx),
     sobre:           () => infoCommands.sobre(ctx),
     ban:             () => adminCommands.ban(ctx),
@@ -178,17 +127,13 @@ async function routeCommand(command, ctx) {
     promover:        () => adminCommands.promover(ctx),
     rebaixar:        () => adminCommands.rebaixar(ctx),
     todos:           () => adminCommands.todos(ctx),
+    apagar:          () => adminCommands.apagar(ctx),
+    revogar:         () => adminCommands.revogar(ctx),
     fechar:          () => adminCommands.fechar(ctx),
     abrir:           () => adminCommands.abrir(ctx),
     nome:            () => adminCommands.nome(ctx),
     desc:            () => adminCommands.desc(ctx),
     foto:            () => adminCommands.foto(ctx),
-    revogar:         () => adminCommands.revogar(ctx),
-    apagar:          () => adminCommands.apagar(ctx),
-    boasvindas:      () => modCommands.boasvindas(ctx),
-    statusgrupo:     () => modCommands.statusgrupo(ctx),
-    fotostatus:      () => modCommands.fotostatus(ctx),
-    clonar:          () => adminCommands.clonar(ctx),
     warn:            () => modCommands.warn(ctx),
     warnings:        () => modCommands.warnings(ctx),
     resetwarn:       () => modCommands.resetwarn(ctx),
@@ -197,53 +142,27 @@ async function routeCommand(command, ctx) {
     antilink:        () => modCommands.antilink(ctx),
     antiflood:       () => modCommands.antiflood(ctx),
     banword:         () => modCommands.banword(ctx),
-    delbanword:      () => modCommands.delbanword(ctx),
-    limparbanword:   () => modCommands.limparbanword(ctx),
-    debate:          () => debateCommands.debate(ctx),
-    favor:           () => debateCommands.votoFavor(ctx),
-    novotema:        () => debateCommands.novotema(ctx),
-    temadebate:      () => debateCommands.temadebate(ctx),
-    contra:          () => debateCommands.votoContra(ctx),
-    votos:           () => debateCommands.verVotos(ctx),
-    fimdebate:       () => debateCommands.fimDebate(ctx),
-    agendarmsg:      () => extrasCommands.agendarmsg(ctx),
-    marcar:          () => extrasCommands.marcar(ctx),
-    marcaradmin:     () => extrasCommands.marcaradmin(ctx),
-    hidetag:         () => extrasCommands.hidetag(ctx),
-    excluirinativo:  () => extrasCommands.excluirinativo(ctx),
-    redefinirlink:   () => extrasCommands.redefinirlink(ctx),
-    antisticker:     () => extrasCommands.antisticker(ctx),
-    antiaudio:       () => extrasCommands.antiaudio(ctx),
-    antimage:        () => extrasCommands.antimage(ctx),
-    antivideo:       () => extrasCommands.antivideo(ctx),
-    antidocumento:   () => extrasCommands.antidocumento(ctx),
-    whitelist:       () => extrasCommands.whitelist(ctx),
-    verwhitelist:    () => extrasCommands.verwhitelist(ctx),
-    delwhitelist:    () => extrasCommands.delwhitelist(ctx),
-    blacklist:       () => extrasCommands.blacklist(ctx),
-    verblacklist:    () => extrasCommands.verblacklist(ctx),
-    delblacklist:    () => extrasCommands.delblacklist(ctx),
-    wame:            () => extrasCommands.wame(ctx),
-    sistema:         () => extrasCommands.sistema(ctx),
-    reportar:        () => extrasCommands.reportar(ctx),
-    wallpaper:       () => downloadCommands.wallpaper(ctx),
+    delbanword:      () => modCommands.delbanword ? modCommands.delbanword(ctx) : ctx.reply("🔧 Em breve!"),
+    limparbanword:   () => modCommands.limparbanword ? modCommands.limparbanword(ctx) : ctx.reply("🔧 Em breve!"),
+    boasvindas:      () => modCommands.boasvindas(ctx),
+    antimention:     () => modCommands.antimention(ctx),
+    antimentadmin:   () => modCommands.antimentadmin(ctx),
+    ligarbot:        () => ownerCommands.ligarbot(ctx),
+    desligarbot:     () => ownerCommands.desligarbot(ctx),
+    modobot:         () => ownerCommands.modobot(ctx),
     play:            () => downloadCommands.play(ctx),
     playvid:         () => downloadCommands.playvid(ctx),
     youtube:         () => downloadCommands.youtube(ctx),
     tiktok:          () => downloadCommands.tiktok(ctx),
-    tiktokmp3:       () => downloadCommands.tiktokmp3(ctx),
     instagram:       () => downloadCommands.instagram(ctx),
     facebook:        () => downloadCommands.facebook(ctx),
-    twitter:         () => downloadCommands.twitter(ctx),
     kwai:            () => downloadCommands.kwai(ctx),
     spotify:         () => downloadCommands.spotify(ctx),
-    spotifysearch:   () => downloadCommands.spotifysearch(ctx),
     soundcloud:      () => downloadCommands.soundcloud(ctx),
     mediafire:       () => downloadCommands.mediafire(ctx),
-    pinterest:       () => downloadCommands.pinterest(ctx),
     tomp3:           () => downloadCommands.tomp3(ctx),
-    tts:             () => downloadCommands.tts(ctx),
     revelarft:       () => downloadCommands.revelarft(ctx),
+    clonar:          () => downloadCommands.clonar(ctx),
     shazam:          () => downloadCommands.shazam(ctx),
     toimg:           () => stickerCommands.toimg(ctx),
     togif:           () => stickerCommands.togif(ctx),
@@ -283,108 +202,88 @@ async function routeCommand(command, ctx) {
     perfil:          () => brincadeiraCommands.perfil(ctx),
     tabela:          () => brincadeiraCommands.tabela(ctx),
     ddd:             () => brincadeiraCommands.ddd(ctx),
+    debate:          () => brincadeiraCommands.debate(ctx),
   };
 
   const handler = routes[command];
   if (handler) return handler();
-  if (ctx.isAdmin || ctx.isOwner) {
-    await ctx.reply(`❌ Comando *${config.prefix}${command}* não encontrado!\n\nDigite *${config.prefix}lutchi* para ver o menu.`);
-  }
+  await ctx.reply("❌ Comando *" + command + "* não encontrado!\n\nDigite *" + config.menuPrefix + "* para ver o menu.");
 }
 
 async function passiveModeration(sock, msg, from, sender, body, messageContent) {
-  const senderNum = normalizeId(sender);
+  try {
+    // Anti-menção a admins
+    if (getAntiMentAdmin(from)) {
+      const groupMeta = await sock.groupMetadata(from).catch(() => null);
+      if (groupMeta) {
+        const mentioned = messageContent?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const admins = groupMeta.participants.filter(p => p.admin).map(p => p.id);
+        const mentionedAdmin = mentioned.some(m =>
+          admins.some(a => normalizeId(a) === normalizeId(m)) ||
+          m.includes(config.owner.number)
+        );
+        const senderIsAdmin = admins.some(a => normalizeId(a) === normalizeId(sender));
+        const senderIsOwner = checkIsOwner(sender, groupMeta);
+        if (mentionedAdmin && senderIsAdmin === false && senderIsOwner === false) {
+          await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
+          await sock.groupParticipantsUpdate(from, [sender], "remove").catch(() => {});
+          await sock.sendMessage(from, {
+            text: "🔨 @" + normalizeId(sender) + " foi banido por mencionar um administrador!",
+            mentions: [sender],
+          }).catch(() => {});
+          return;
+        }
+      }
+    }
+  } catch (_) {}
 
+  // Anti-mute
   if (isMuted(from, sender)) {
     await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
     return;
   }
 
-  if (extrasCommands.isBlacklisted(from, sender)) {
-    await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-    global.bannedByBot?.add(sender);
-    await sock.groupParticipantsUpdate(from, [sender], "remove").catch(() => {});
-    return;
-  }
-
-  if (extrasCommands.isAntiSticker(from) && messageContent?.stickerMessage) {
-    await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-    await sock.sendMessage(from, { text: `🎭 @${senderNum} stickers não são permitidos!`, mentions: [sender] });
-    return;
-  }
-
-  if (extrasCommands.isAntiAudio(from) && messageContent?.audioMessage) {
-    await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-    await sock.sendMessage(from, { text: `🎵 @${senderNum} áudios não são permitidos!`, mentions: [sender] });
-    return;
-  }
-
-  if (extrasCommands.isAntiImage(from) && messageContent?.imageMessage) {
-    await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-    await sock.sendMessage(from, { text: `🖼️ @${senderNum} imagens não são permitidas!`, mentions: [sender] });
-    return;
-  }
-
-  if (extrasCommands.isAntiVideo(from) && messageContent?.videoMessage) {
-    await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-    await sock.sendMessage(from, { text: `🎬 @${senderNum} vídeos não são permitidos!`, mentions: [sender] });
-    return;
-  }
-
-  if (extrasCommands.isAntiDoc(from) && messageContent?.documentMessage) {
-    await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-    await sock.sendMessage(from, { text: `📄 @${senderNum} documentos não são permitidos!`, mentions: [sender] });
-    return;
-  }
-
+  // Anti-link
   if (getAntiLink(from) && /(https?:\/\/|www\.|chat\.whatsapp\.com)/gi.test(body)) {
-    if (extrasCommands.isWhitelisted(from, sender)) return;
     await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-
-    let isAdmin = false, groupMeta = null;
-    try {
-      groupMeta = await sock.groupMetadata(from);
-      isAdmin = groupMeta.participants.filter((p) => p.admin).some((p) => normalizeId(p.id) === senderNum);
-    } catch (_) {}
-
-    if (isAdmin) {
-      await sock.sendMessage(from, { text: `⚠️ @${senderNum} anti-link ativo!`, mentions: [sender] });
-      return;
-    }
-
-    let banJid = sender;
-    if (groupMeta) {
-      for (const p of groupMeta.participants) {
-        if (normalizeId(p.id) === senderNum && p.id.endsWith("@s.whatsapp.net")) {
-          banJid = p.id; break;
-        }
-      }
-    }
-
-    global.bannedByBot?.add(banJid);
-    global.bannedByBot?.add(sender);
-    await sock.sendMessage(from, { text: `🚫 *ANTI-LINK*\n\n@${senderNum} foi *banido* por enviar link!`, mentions: [sender] });
-    await sock.groupParticipantsUpdate(from, [banJid], "remove").catch(() => {});
+    await sock.sendMessage(from, {
+      text: "⚠️ @" + normalizeId(sender) + " links não são permitidos!",
+      mentions: [sender],
+    });
     return;
   }
 
+  // Anti-flood
   if (getAntiFlood(from)) {
-    const key = `${from}:${sender}`, now = Date.now();
+    const key = from + ":" + sender;
+    const now = Date.now();
     if (!floodTracker[key]) floodTracker[key] = [];
-    floodTracker[key] = floodTracker[key].filter((t) => now - t < 5000);
+    floodTracker[key] = floodTracker[key].filter(t => now - t < 5000);
     floodTracker[key].push(now);
     if (floodTracker[key].length > config.floodLimit) {
-      await sock.sendMessage(from, { text: `⚠️ @${senderNum} pare de fazer flood!`, mentions: [sender] });
+      await sock.sendMessage(from, {
+        text: "⚠️ @" + normalizeId(sender) + " pare de fazer flood!",
+        mentions: [sender],
+      });
       floodTracker[key] = [];
     }
   }
 
+  // Banwords
   const banwords = getBanwords(from);
-  if (banwords.length > 0 && banwords.some((w) => body.toLowerCase().includes(w))) {
+  if (banwords.length > 0 && banwords.some(w => body.toLowerCase().includes(w))) {
     await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-    await sock.sendMessage(from, { text: `⚠️ @${senderNum} palavra proibida!`, mentions: [sender] });
+    await sock.sendMessage(from, {
+      text: "⚠️ @" + normalizeId(sender) + " palavra proibida!",
+      mentions: [sender],
+    });
   }
 }
 
 module.exports = messageHandler;
-// Linha extra — não precisa de adicionar nada aqui
+
+// Sobrescreve passiveModeration para incluir antiMention
+const _origHandler = module.exports;
+const { getAntiMention } = require("../utils/database");
+
+const _prevPassive = passiveModeration;

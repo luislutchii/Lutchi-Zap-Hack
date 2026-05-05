@@ -241,3 +241,42 @@ module.exports = {
   banword, delbanword, limparbanword,
   ligarbot, desligarbot, modobot, boasvindas,
 };
+
+// ── ANTIMENÇÃO ADMINS ─────────────────────────────────────────
+async function antimentadmin(ctx) {
+  const { args, reply, from, isGroup } = ctx;
+  if (!isGroup) return reply("❌ Apenas em grupos!");
+  const option = args[0]?.toLowerCase();
+  const { setAntiMentAdmin, getAntiMentAdmin } = require("../utils/database");
+  if (!option || !["on", "off"].includes(option)) {
+    const status = getAntiMentAdmin(from);
+    return reply("🛡️ *Anti-Menção Admin:* " + (status ? "✅ Ativado" : "❌ Desativado") + "\n\nUse: .antimentadmin on/off");
+  }
+  setAntiMentAdmin(from, option === "on");
+  return reply("🛡️ *Anti-Menção Admin " + (option === "on" ? "Ativado ✅" : "Desativado ❌") + "*\n" +
+    (option === "on" ? "_Membros que mencionarem admins serão banidos!_" : "_Proteção desativada._"));
+}
+
+module.exports = Object.assign(module.exports, { antimentadmin });
+
+async function antimention(ctx) {
+  const { from, args, reply } = ctx;
+  const option = args[0]?.toLowerCase();
+  if (!["on", "off"].includes(option)) {
+    const { getAntiMention } = require("../utils/database");
+    const status = getAntiMention(from);
+    return reply(
+      `🔔 *Anti-Mention Admin:* ${status ? "✅ Ativado" : "❌ Desativado"}\n\n` +
+      `_Quando ativado, membros que mencionarem\nadmins ou o dono serão banidos._\n\n` +
+      `Use: *.antimention on/off*`
+    );
+  }
+  const { setAntiMention } = require("../utils/database");
+  setAntiMention(from, option === "on");
+  return reply(option === "on"
+    ? `🔔 *Anti-Mention ativado!* ✅\n_Membros que mencionarem admins/dono serão banidos._`
+    : `🔔 *Anti-Mention desativado!* ❌`
+  );
+}
+
+module.exports.antimention = antimention;
