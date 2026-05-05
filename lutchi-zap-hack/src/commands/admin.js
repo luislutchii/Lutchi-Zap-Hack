@@ -131,4 +131,49 @@ async function foto(ctx) {
   } catch (e) { return reply("❌ Erro ao mudar foto: " + e.message); }
 }
 
-module.exports = { ban, kick, add, promover, rebaixar, todos, fechar, abrir, nome, desc, foto };
+
+async function apagar(ctx) {
+  const { sock, from, msg, reply, isBotAdmin } = ctx;
+  if (!isBotAdmin) return reply("❌ Preciso ser admin para apagar mensagens!");
+  const quoted = msg.message?.extendedTextMessage?.contextInfo;
+  if (!quoted?.stanzaId) return reply("❌ Responda a mensagem que deseja apagar!");
+  try {
+    await sock.sendMessage(from, {
+      delete: {
+        remoteJid: from,
+        fromMe: false,
+        id: quoted.stanzaId,
+        participant: quoted.participant,
+      }
+    });
+    return reply("🗑️ Mensagem apagada!");
+  } catch (e) { return reply("❌ Erro: " + e.message); }
+}
+
+async function revogar(ctx) {
+  const { sock, from, reply, isBotAdmin } = ctx;
+  if (!isBotAdmin) return reply("❌ Preciso ser admin para revogar o link!");
+  try {
+    await sock.groupRevokeInvite(from);
+    const newCode = await sock.groupInviteCode(from);
+    return reply("✅ *Link revogado!*\n\n🔗 Novo link:\nhttps://chat.whatsapp.com/" + newCode);
+  } catch (e) { return reply("❌ Erro: " + e.message); }
+}
+
+async function boasvindas(ctx) {
+  const { from, args, reply, isGroup } = ctx;
+  if (!isGroup) return reply("❌ Apenas em grupos!");
+  const { setBoasVindas, getBoasVindas } = require("../utils/database");
+  const option = args[0]?.toLowerCase();
+  if (!["on", "off"].includes(option)) {
+    const status = getBoasVindas(from);
+    return reply("👋 *Boas-Vindas:* " + (status ? "✅ Ativado" : "❌ Desativado") + "\n\nUse: .boasvindas on/off");
+  }
+  setBoasVindas(from, option === "on");
+  return reply(option === "on"
+    ? "👋 *Boas-Vindas ativado!* ✅\n_Novos membros serão saudados automaticamente._"
+    : "👋 *Boas-Vindas desativado!* ❌"
+  );
+}
+
+module.exports = { ban, kick, add, promover, rebaixar, todos, fechar, abrir, nome, desc, foto, apagar, revogar, boasvindas };
