@@ -103,6 +103,13 @@ async function messageHandler(sock, msg, store) {
         sock.sendMessage(from, { text, ...opts }, { quoted: msg }),
     };
 
+    // Reação ✅ ao receber comando válido
+    try {
+      await sock.sendMessage(from, {
+        react: { text: "✅", key: msg.key }
+      });
+    } catch (_) {}
+
     await routeCommand(command, ctx);
   } catch (err) {
     console.error("❌ Erro no handler:", err.message);
