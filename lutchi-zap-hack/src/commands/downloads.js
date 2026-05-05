@@ -46,7 +46,7 @@ async function dlBuffer(url) {
 async function searchYouTube(query, limit = 1) {
   try {
     // Usar yt-dlp para buscar vídeos (mais confiável)
-    const searchCmd = `yt-dlp --remote-components ejs:github --dump-json --flat-playlist --limit ${limit} "ytsearch${limit}:${query}" 2>/dev/null`;
+    const searchCmd = `yt-dlp --dump-json --flat-playlist --playlist-end ${limit} "ytsearch${limit}:${query}" 2>/dev/null`;
     const stdout = await execPromise(searchCmd);
     
     const results = [];
