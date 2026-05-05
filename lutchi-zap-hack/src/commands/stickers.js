@@ -6,6 +6,9 @@ const os      = require("os");
 const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 const p = ".";
 
+const STICKER_PACK   = "Lutchi Zap Hack";
+const STICKER_AUTHOR = "@luislutchii";
+
 // ── Download de media ─────────────────────────────────────────
 async function downloadMedia(mediaMsg, type) {
   const stream = await downloadContentFromMessage(mediaMsg, type);
@@ -17,12 +20,13 @@ async function downloadMedia(mediaMsg, type) {
 // ── Converte buffer para WebP via ffmpeg ──────────────────────
 function convertToWebP(inputBuffer, isVideo = false) {
   return new Promise((resolve, reject) => {
-    const tmpIn  = path.join(os.tmpdir(), `stk_in_${Date.now()}.${isVideo ? "mp4" : "jpg"}`);
+    const ext    = isVideo ? "mp4" : "jpg";
+    const tmpIn  = path.join(os.tmpdir(), `stk_in_${Date.now()}.${ext}`);
     const tmpOut = path.join(os.tmpdir(), `stk_out_${Date.now()}.webp`);
 
     fs.writeFileSync(tmpIn, inputBuffer);
 
-    const cmd = ffmpeg(tmpIn)
+    ffmpeg(tmpIn)
       .outputOptions([
         "-vf", "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
         "-vcodec", "libwebp",
@@ -33,21 +37,42 @@ function convertToWebP(inputBuffer, isVideo = false) {
         "-t", "00:00:05",
       ])
       .toFormat("webp")
-      .save(tmpOut);
-
-    cmd.on("end", () => {
-      const buf = fs.readFileSync(tmpOut);
-      fs.unlinkSync(tmpIn);
-      fs.unlinkSync(tmpOut);
-      resolve(buf);
-    });
-
-    cmd.on("error", (err) => {
-      try { fs.unlinkSync(tmpIn); } catch (_) {}
-      try { fs.unlinkSync(tmpOut); } catch (_) {}
-      reject(err);
-    });
+      .save(tmpOut)
+      .on("end", () => {
+        const buf = fs.readFileSync(tmpOut);
+        try { fs.unlinkSync(tmpIn); } catch (_) {}
+        try { fs.unlinkSync(tmpOut); } catch (_) {}
+        resolve(buf);
+      })
+      .on("error", (err) => {
+        try { fs.unlinkSync(tmpIn); } catch (_) {}
+        try { fs.unlinkSync(tmpOut); } catch (_) {}
+        reject(err);
+      });
   });
+}
+
+// ── Envia sticker com metadados (pack + autor) ────────────────
+async function sendSticker(sock, from, msg, buffer) {
+  await sock.sendMessage(from, {
+    sticker: buffer,
+    stickerMetadata: {
+      pack:      STICKER_PACK,
+      publisher: STICKER_AUTHOR,
+    },
+  }, { quoted: msg });
+}
+
+// ── Lê metadados de um WebP (exif) ───────────────────────────
+function parseStickerMeta(buffer) {
+  try {
+    const str  = buffer.toString("binary");
+    const start = str.indexOf("{"");
+    const end   = str.lastIndexOf("}");
+    if (start === -1 || end === -1) return null;
+    const json = Buffer.from(str.slice(start, end + 1), "binary").toString("utf8");
+    return JSON.parse(json);
+  } catch { return null; }
 }
 
 // ── .sticker ──────────────────────────────────────────────────
@@ -68,12 +93,12 @@ async function sticker(ctx) {
     );
 
     await reply("⏳ Criando sticker...");
-    const isVideo = !!(vidMsg && !imgMsg);
-    const buffer  = await downloadMedia(media, isVideo ? "video" : "image");
+    const isVideo    = !!(vidMsg && !imgMsg);
+    const buffer     = await downloadMedia(media, isVideo ? "video" : "image");
     if (!buffer || buffer.length < 100) return reply("❌ Não foi possível baixar a mídia!");
 
     const webpBuffer = await convertToWebP(buffer, isVideo);
-    await sock.sendMessage(from, { sticker: webpBuffer }, { quoted: msg });
+    await sendSticker(sock, from, msg, webpBuffer);
 
   } catch (e) {
     console.error("[STICKER]", e.message);
@@ -94,7 +119,6 @@ async function toimg(ctx) {
     const buffer = await downloadMedia(stickerMsg, "sticker");
     if (!buffer || buffer.length < 100) return reply("❌ Não foi possível converter!");
 
-    // Converte WebP para PNG via ffmpeg
     const pngBuffer = await new Promise((resolve, reject) => {
       const tmpIn  = path.join(os.tmpdir(), `toimg_in_${Date.now()}.webp`);
       const tmpOut = path.join(os.tmpdir(), `toimg_out_${Date.now()}.png`);
@@ -104,8 +128,8 @@ async function toimg(ctx) {
         .save(tmpOut)
         .on("end", () => {
           const buf = fs.readFileSync(tmpOut);
-          fs.unlinkSync(tmpIn);
-          fs.unlinkSync(tmpOut);
+          try { fs.unlinkSync(tmpIn); } catch (_) {}
+          try { fs.unlinkSync(tmpOut); } catch (_) {}
           resolve(buf);
         })
         .on("error", (e) => {
@@ -170,7 +194,7 @@ async function attp(ctx) {
       } catch (_) {}
     }
     if (!buffer || buffer.length < 100) return reply("❌ Não foi possível criar o sticker.");
-    await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
+    await sendSticker(sock, from, msg, buffer);
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
@@ -201,7 +225,7 @@ async function ttp(ctx) {
       } catch (_) {}
     }
     if (!buffer || buffer.length < 100) return reply("❌ Não foi possível criar o sticker.");
-    await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
+    await sendSticker(sock, from, msg, buffer);
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
@@ -228,7 +252,7 @@ async function brat(ctx) {
       buffer  = Buffer.from(r.data);
     }
     if (!buffer || buffer.length < 100) return reply("❌ Não foi possível criar o sticker.");
-    await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
+    await sendSticker(sock, from, msg, buffer);
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
@@ -245,24 +269,35 @@ async function emojimix(ctx) {
     );
     const buffer = Buffer.from(res.data);
     if (!buffer || buffer.length < 100) return reply("❌ Esses emojis não podem ser misturados!");
-    await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
+    await sendSticker(sock, from, msg, buffer);
   } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
 // ── .stickerinfo ──────────────────────────────────────────────
 async function stickerinfo(ctx) {
-  const { msg, reply } = ctx;
-  const m          = msg.message;
-  const quoted     = m?.extendedTextMessage?.contextInfo?.quotedMessage;
-  const stickerMsg = m?.stickerMessage || quoted?.stickerMessage;
-  if (!stickerMsg) return reply(`❌ Responda um sticker com *${p}stickerinfo*`);
-  return reply(
-    `🎨 *INFO DO STICKER*\n\n` +
-    `📦 *Pack:* ${stickerMsg?.name      || "Desconhecido"}\n` +
-    `✏️ *Autor:* ${stickerMsg?.publisher || "Desconhecido"}\n` +
-    `🎞️ *Animado:* ${stickerMsg?.isAnimated ? "Sim ✅" : "Não ❌"}\n\n` +
-    `_🤖 Lutchi Zap Hack_`
-  );
+  const { sock, from, msg, reply } = ctx;
+  try {
+    const m          = msg.message;
+    const quoted     = m?.extendedTextMessage?.contextInfo?.quotedMessage;
+    const stickerMsg = m?.stickerMessage || quoted?.stickerMessage;
+    if (!stickerMsg) return reply(`❌ Responda um sticker com *${p}stickerinfo*`);
+
+    // Tenta ler metadados do arquivo WebP baixado
+    const buffer = await downloadMedia(stickerMsg, "sticker");
+    const meta   = parseStickerMeta(buffer);
+
+    const pack  = meta?.["sticker-pack-name"]      || stickerMsg?.name      || "Desconhecido";
+    const autor = meta?.["sticker-pack-publisher"]  || stickerMsg?.publisher || "Desconhecido";
+    const anim  = stickerMsg?.isAnimated ? "Sim ✅" : "Não ❌";
+
+    return reply(
+      `🎨 *INFO DO STICKER*\n\n` +
+      `📦 *Pack:* ${pack}\n` +
+      `✏️ *Autor:* ${autor}\n` +
+      `🎞️ *Animado:* ${anim}\n\n` +
+      `_🤖 Lutchi Zap Hack_`
+    );
+  } catch (e) { return reply("❌ Erro: " + e.message); }
 }
 
 // ── .gerarlink ────────────────────────────────────────────────
