@@ -1,7 +1,6 @@
 const axios   = require("axios");
 const ffmpeg  = require("fluent-ffmpeg");
 const fs      = require("fs");
-const path    = require("path");
 const os      = require("os");
 const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 const p = ".";
@@ -13,17 +12,25 @@ async function downloadMedia(mediaMsg, type) {
   return Buffer.concat(chunks);
 }
 
-function convertToWebP(inputBuffer, isVideo = false) {
+function getMimeExt(mimetype = "") {
+  if (mimetype.includes("png"))  return "png";
+  if (mimetype.includes("webp")) return "webp";
+  if (mimetype.includes("gif"))  return "gif";
+  if (mimetype.includes("mp4"))  return "mp4";
+  if (mimetype.includes("video")) return "mp4";
+  return "jpg";
+}
+
+function convertToWebP(inputBuffer, ext = "jpg") {
   return new Promise((resolve, reject) => {
-    const ext    = isVideo ? "mp4" : "jpg";
-    const tmpIn  = path.join(os.tmpdir(), "stk_in_" + Date.now() + "." + ext);
-    const tmpOut = path.join(os.tmpdir(), "stk_out_" + Date.now() + ".webp");
+    const tmpIn  = os.homedir() + "/stk_in_" + Date.now() + "." + ext;
+    const tmpOut = os.homedir() + "/stk_out_" + Date.now() + ".webp";
     fs.writeFileSync(tmpIn, inputBuffer);
     ffmpeg(tmpIn)
       .outputOptions([
         "-vf", "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
         "-vcodec", "libwebp",
-        "-loop", isVideo ? "0" : "1",
+        "-loop", ext === "mp4" ? "0" : "1",
         "-preset", "icon",
         "-an", "-vsync", "0",
         "-t", "00:00:05",
@@ -34,6 +41,7 @@ function convertToWebP(inputBuffer, isVideo = false) {
         const buf = fs.readFileSync(tmpOut);
         try { fs.unlinkSync(tmpIn); } catch (_) {}
         try { fs.unlinkSync(tmpOut); } catch (_) {}
+        console.log("[STICKER] WebP gerado:", buf.length, "bytes");
         resolve(buf);
       })
       .on("error", (err) => {
@@ -52,20 +60,33 @@ async function sticker(ctx) {
     const imgMsg = m?.imageMessage || quoted?.imageMessage || null;
     const vidMsg = m?.videoMessage || quoted?.videoMessage || null;
     const media  = imgMsg || vidMsg;
+
     if (!media) return reply(
       "❌ *Nenhuma imagem detectada!*\n\n" +
       "📌 Como usar:\n" +
       "> Envie a imagem com *" + p + "sticker* na legenda\n" +
       "> OU responda uma imagem com *" + p + "sticker*"
     );
+
     await reply("⏳ Criando sticker...");
+
     const isVideo = !!(vidMsg && !imgMsg);
-    const buffer  = await downloadMedia(media, isVideo ? "video" : "image");
+    const mime    = (isVideo ? vidMsg?.mimetype : imgMsg?.mimetype) || "";
+    const ext     = getMimeExt(mime);
+
+    console.log("[STICKER] mime:", mime, "ext:", ext);
+
+    const buffer = await downloadMedia(media, isVideo ? "video" : "image");
+    console.log("[STICKER] buffer baixado:", buffer.length, "bytes");
+
     if (!buffer || buffer.length < 100) return reply("❌ Nao foi possivel baixar a midia!");
-    const webp = await convertToWebP(buffer, isVideo);
+
+    const webp = await convertToWebP(buffer, ext);
+    if (!webp || webp.length < 100) return reply("❌ Conversao falhou!");
+
     await sock.sendMessage(from, { sticker: webp }, { quoted: msg });
   } catch (e) {
-    console.error("[STICKER]", e.message);
+    console.error("[STICKER ERROR]", e.message);
     return reply("❌ Erro: " + e.message);
   }
 }
@@ -80,8 +101,8 @@ async function toimg(ctx) {
     await reply("⏳ Convertendo...");
     const buffer = await downloadMedia(stickerMsg, "sticker");
     if (!buffer || buffer.length < 100) return reply("❌ Nao foi possivel converter!");
-    const tmpIn  = path.join(os.tmpdir(), "toimg_in_" + Date.now() + ".webp");
-    const tmpOut = path.join(os.tmpdir(), "toimg_out_" + Date.now() + ".png");
+    const tmpIn  = os.homedir() + "/toimg_in_" + Date.now() + ".webp";
+    const tmpOut = os.homedir() + "/toimg_out_" + Date.now() + ".png";
     fs.writeFileSync(tmpIn, buffer);
     const png = await new Promise((resolve, reject) => {
       ffmpeg(tmpIn).toFormat("png").save(tmpOut)
