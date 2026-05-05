@@ -55,8 +55,6 @@ async function lutchi(ctx) {
     "│ " + p + "nome <novo nome>\n" +
     "│ " + p + "desc <descrição>\n" +
     "│ " + p + "foto (responda imagem)\n" +
-    "│ " + p + "statusgrupo <texto>\n" +
-    "│ " + p + "fotostatus (responda img)\n" +
     "│ " + p + "revogar\n" +
     "│ " + p + "apagar\n" +
     "│ " + p + "boasvindas on/off\n" +
