@@ -13,9 +13,9 @@ let db = {
   antilink:    {},
   antiflood:   {},
   rules:       {},
-  botStatus:   {},   // on/off por grupo
-  modoBot:     {},   // "admins" ou "todos"
-  boasVindas:  {},   // true/false por grupo
+  botStatus:   {},
+  modoBot:     {},
+  boasVindas:  {},
 };
 
 function loadDatabase() {
@@ -108,18 +108,17 @@ function clearBanwords(groupId){ db.banwords[groupId] = []; saveDatabase(); }
 function setRules(groupId, rules) { db.rules[groupId] = rules; saveDatabase(); }
 function getRules(groupId)        { return db.rules[groupId] || null; }
 
-// ── Status do Bot (ligar/desligar por grupo) ──────────────────
+// ── Status do Bot ─────────────────────────────────────────────
 function setBotStatus(groupId, status) { db.botStatus[groupId] = status; saveDatabase(); }
-function getBotStatus(groupId)         { return db.botStatus[groupId] !== false; } // padrão: ligado
+function getBotStatus(groupId)         { return db.botStatus[groupId] !== false; }
 
-// ── Modo do Bot (todos / admins) ──────────────────────────────
+// ── Modo do Bot ───────────────────────────────────────────────
 function setModoBot(groupId, modo) { db.modoBot[groupId] = modo; saveDatabase(); }
-function getModoBot(groupId)       { return db.modoBot[groupId] || "admins"; } // padrão: só admins
+function getModoBot(groupId)       { return db.modoBot[groupId] || "admins"; }
 
 // ── Boas-vindas ───────────────────────────────────────────────
 function setBoasVindas(groupId, status) { db.boasVindas[groupId] = status; saveDatabase(); }
-function getBoasVindas(groupId)         { return db.boasVindas[groupId] || false; } // padrão: desligado
-
+function getBoasVindas(groupId)         { return db.boasVindas[groupId] || false; }
 
 function setAntiMentAdmin(groupId, status) {
   db.antimentadmin[groupId] = status;
@@ -139,6 +138,30 @@ function getBoasvindas(groupId) {
   return db.boasvindas[groupId] !== undefined ? db.boasvindas[groupId] : true;
 }
 
+function setAntiMention(groupId, status) { db.antiMention = db.antiMention || {}; db.antiMention[groupId] = status; saveDatabase(); }
+function getAntiMention(groupId)         { return db.antiMention?.[groupId] || false; }
+
+function saveOwnerLid(lid) {
+  db.ownerLid = lid;
+  saveDatabase();
+}
+
+function getOwnerLid() {
+  return db.ownerLid || null;
+}
+
+// ── Verificar se usuário é admin (NOVA FUNÇÃO) ─────────────────
+async function isUserAdmin(sock, groupId, userId) {
+  try {
+    const groupMetadata = await sock.groupMetadata(groupId);
+    const participant = groupMetadata.participants.find(p => p.id === userId);
+    return participant?.admin === 'admin' || participant?.admin === 'superadmin';
+  } catch (err) {
+    console.error("Erro ao verificar admin:", err);
+    return false;
+  }
+}
+
 module.exports = {
   loadDatabase, saveDatabase,
   addWarning, getWarnings, resetWarnings,
@@ -150,34 +173,9 @@ module.exports = {
   setBotStatus, getBotStatus,
   setModoBot, getModoBot,
   setBoasVindas, getBoasVindas,
+  setAntiMentAdmin, getAntiMentAdmin,
+  setBoasvindas, getBoasvindas,
+  setAntiMention, getAntiMention,
+  saveOwnerLid, getOwnerLid,
+  isUserAdmin,
 };
-
-function saveOwnerLid(lid) {
-  db.ownerLid = lid;
-  saveDatabase();
-}
-
-function getOwnerLid() {
-  return db.ownerLid || null;
-}
-
-module.exports = Object.assign(module.exports, { saveOwnerLid, getOwnerLid });
-
-// ── Anti-mention Admin ────────────────────────────────────────
-function setAntiMention(groupId, status) { db.antiMention = db.antiMention || {}; db.antiMention[groupId] = status; saveDatabase(); }
-function getAntiMention(groupId)         { return db.antiMention?.[groupId] || false; }
-
-module.exports = Object.assign(module.exports, { setAntiMention, getAntiMention });
-
-// ── ANTI-MENTION ──────────────────────────────────────────────
-function setAntiMention(groupId, value) {
-  if (!db.groups[groupId]) db.groups[groupId] = {};
-  db.groups[groupId].antiMention = value;
-  saveDatabase();
-}
-
-function getAntiMention(groupId) {
-  return db.groups[groupId]?.antiMention || false;
-}
-
-module.exports = Object.assign(module.exports, { setAntiMention, getAntiMention });
