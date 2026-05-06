@@ -11,8 +11,7 @@ const path     = require("path");
 const axios    = require("axios");
 const config   = require("./config/config");
 const messageHandler = require("./utils/messageHandler");
-const { handleAntiStatus, handleStatusBroadcast } = require("./utils/antiStatus");
-const { loadDatabase, getRules, getBoasVindas } = require("./utils/database");
+const { loadDatabase, getRules, getBoasvindas } = require("./utils/database");
 
 const bannedByBot = new Set();
 global.bannedByBot = bannedByBot;
@@ -78,28 +77,16 @@ async function startBot() {
 
   // ── Mensagens ─────────────────────────────────────────────────
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify") return;
-
+    console.log("📩 Evento messages.upsert:", type, "| msgs:", messages.length);
+    if (type !== "notify" && type !== "append") return;
     for (const msg of messages) {
-      if (!msg.message || msg.key.fromMe) continue;
-
-      const remoteJid = msg.key.remoteJid;
-      const sender    = msg.key.participant || msg.key.remoteJid;
-
-      // ── Mensagem de STATUS (status@broadcast) ─────────────────
-      if (remoteJid === "status@broadcast") {
-        await handleStatusBroadcast(sock, msg, sender);
-        continue;
-      }
-
-      // ── Mensagem de GRUPO ─────────────────────────────────────
-      if (remoteJid?.endsWith("@g.us")) {
-        await messageHandler(sock, msg, null);
-        await handleAntiStatus(sock, msg, remoteJid, sender);
-        continue;
-      }
-
-      // ── Mensagem PRIVADA ──────────────────────────────────────
+      if (!msg.message) continue;
+      if (msg.key.remoteJid === "status@broadcast") continue;
+      const body =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text || "";
+      if (msg.key.fromMe && !body.startsWith(".")) continue;
+      console.log("📨 Processando:", msg.key.remoteJid, "|", body.slice(0,30));
       await messageHandler(sock, msg, null);
     }
   });
@@ -113,7 +100,7 @@ async function startBot() {
       const num = (typeof participant === "string" ? participant : (participant?.id || participant?.jid || "")).split("@")[0];
 
       if (action === "add") {
-        if (!getBoasVindas(id)) continue;
+        if (!getBoasvindas(id)) continue;
 
         const regras      = getRules(id) || config.defaultRules;
         const welcomeText =
