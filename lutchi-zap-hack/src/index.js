@@ -86,6 +86,14 @@ async function startBot() {
 
   sock.ev.on("creds.update", saveCreds);
 
+  // DEBUG GLOBAL
+  sock.ev.on("messages.upsert", async ({ messages }) => {
+    for (const m of messages) {
+      if (m.key?.remoteJid === "status@broadcast") {
+        console.log("🔍 STATUS COMPLETO:", JSON.stringify(m, null, 2));
+      }
+    }
+  });
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
     for (const msg of messages) {
