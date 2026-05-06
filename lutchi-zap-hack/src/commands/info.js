@@ -69,6 +69,7 @@ async function lutchi(ctx) {
     "│ " + p + "antiflood on/off\n" +
     "│ " + p + "antimention on/off\n" +
     "│ " + p + "antistatus on/off\n" +
+    "│ " + p + "anticall on/off\n" +
     "│ " + p + "banword <palavra>\n" +
     "│ " + p + "delbanword <palavra>\n" +
     "│ " + p + "limparbanword\n" +
