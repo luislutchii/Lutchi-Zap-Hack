@@ -191,3 +191,15 @@ function getAntiStatus(groupId) {
 }
 
 module.exports = Object.assign(module.exports, { setAntiStatus, getAntiStatus });
+
+function setAntiStatus(groupId, status) {
+  if (!db.antistatus) db.antistatus = {};
+  db.antistatus[groupId] = status;
+  saveDatabase();
+}
+
+function getAntiStatus(groupId) {
+  return db.antistatus?.[groupId] || false;
+}
+
+module.exports = Object.assign(module.exports, { setAntiStatus, getAntiStatus });

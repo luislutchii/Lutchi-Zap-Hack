@@ -110,7 +110,7 @@ async function startBot() {
     if (!groupMeta) return;
 
     for (const participant of participants) {
-      const num = participant.split("@")[0];
+      const num = (typeof participant === "string" ? participant : (participant?.id || participant?.jid || "")).split("@")[0];
 
       if (action === "add") {
         if (!getBoasVindas(id)) continue;

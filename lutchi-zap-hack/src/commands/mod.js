@@ -279,3 +279,20 @@ module.exports = {
   banword, delbanword, limparbanword,
   ligarbot, desligarbot, modobot, boasvindas, antistatus,
 };
+
+// ── ANTISTATUS ────────────────────────────────────────────────
+async function antistatus(ctx) {
+  const { args, reply, from, isGroup } = ctx;
+  if (!isGroup) return reply("❌ Apenas em grupos!");
+  const option = args[0]?.toLowerCase();
+  const { setAntiStatus, getAntiStatus } = require("../utils/database");
+  if (!option || !["on", "off"].includes(option)) {
+    const status = getAntiStatus ? getAntiStatus(from) : false;
+    return reply("📵 *Anti-Status:* " + (status ? "✅ Ativado" : "❌ Desativado") + "\n\nUse: .antistatus on/off");
+  }
+  if (setAntiStatus) setAntiStatus(from, option === "on");
+  return reply("📵 *Anti-Status " + (option === "on" ? "Ativado ✅" : "Desativado ❌") + "*\n" +
+    (option === "on" ? "_Membros que mencionarem o grupo no status serão removidos!_\n\n⚠️ Nota: O WhatsApp não permite detectar menções de status diretamente. Este comando remove quem enviar mensagens sobre status no grupo._" : ""));
+}
+
+module.exports = Object.assign(module.exports, { antistatus });
