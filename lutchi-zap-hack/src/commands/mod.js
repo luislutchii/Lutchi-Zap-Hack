@@ -272,12 +272,33 @@ async function antistatus(ctx) {
   );
 }
 
+
+async function anticall(ctx) {
+  const { from, args, reply, isGroup } = ctx;
+  if (!isGroup) return reply("❌ Apenas em grupos!");
+  const { setAntiCall, getAntiCall } = require("../utils/database");
+  const option = args[0]?.toLowerCase();
+  if (!["on", "off"].includes(option)) {
+    const status = getAntiCall(from);
+    return reply(
+      "📵 *Anti-Call:* " + (status ? "✅ Ativado" : "❌ Desativado") + "\n\n" +
+      "_Quando ativado, membros que fizerem\nchamadas no grupo serão banidos._\n\n" +
+      "Use: *.anticall on/off*"
+    );
+  }
+  setAntiCall(from, option === "on");
+  return reply(option === "on"
+    ? "📵 *Anti-Call ativado!* ✅\n_Membros que fizerem chamadas serão banidos._"
+    : "📵 *Anti-Call desativado!* ❌"
+  );
+}
+
 module.exports = {
   warn, warnings, resetwarn,
   mute, unmute,
   antilink, antiflood, antimention,
   banword, delbanword, limparbanword,
-  ligarbot, desligarbot, modobot, boasvindas, antistatus,
+  ligarbot, desligarbot, modobot, boasvindas, antistatus, anticall,
 };
 
 // ── ANTISTATUS ────────────────────────────────────────────────

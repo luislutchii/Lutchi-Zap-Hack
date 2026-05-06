@@ -94,6 +94,26 @@ async function startBot() {
   });
 
   // ── Entradas / Saídas ─────────────────────────────────────────
+  // ── Anti-Call ─────────────────────────────────────────────
+  sock.ev.on("call", async (calls) => {
+    for (const call of calls) {
+      if (!call.isGroup || call.status !== "offer") continue;
+      const { getAntiCall } = require("./commands/mod");
+      // getAntiCall via database
+      const { getAntiCall: getAC } = require("./utils/database");
+      if (!getAC(call.chatId)) continue;
+      const caller = call.from;
+      const num    = caller.split("@")[0].replace(/:.*/, "");
+      global.bannedByBot?.add(caller);
+      await sock.sendMessage(call.chatId, {
+        text: "📵 *ANTI-CALL*\n\n@" + num + " foi *banido* por fazer uma chamada no grupo!",
+        mentions: [caller],
+      }).catch(() => {});
+      await sock.groupParticipantsUpdate(call.chatId, [caller], "remove").catch(() => {});
+      await sock.rejectCall(call.id, call.from).catch(() => {});
+    }
+  });
+
   sock.ev.on("group-participants.update", async ({ id, participants, action }) => {
     const groupMeta = await sock.groupMetadata(id).catch(() => null);
     if (!groupMeta) return;
