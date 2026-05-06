@@ -100,7 +100,7 @@ async function play(ctx) {
     await reply(`🎵 *${videoTitle.substring(0, 50)}*\n⏱️ ${formatDuration(videoDuration)}\n⬇️ Baixando...`);
 
     const outBase = path.join(TEMP_DIR, "audio_" + Date.now());
-    await runCmd(`yt-dlp -f "bestaudio" --extract-audio --audio-format mp3 --audio-quality 64K -o "${outBase}.%(ext)s" "${url}"`, 120000);
+    await runCmd(`yt-dlp -f "bestaudio" --extract-audio --audio-format mp3 --audio-quality 320K -o "${outBase}.%(ext)s" "${url}"`, 120000);
 
     const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("audio_"));
     const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
@@ -293,7 +293,7 @@ async function soundcloud(ctx) {
   await reply("⏳ Baixando...");
   try {
     const outBase = path.join(TEMP_DIR, "sc_" + Date.now());
-    await runCmd(`yt-dlp -f bestaudio --extract-audio --audio-format mp3 --audio-quality 64K -o "${outBase}.%(ext)s" "${url}"`, 90000);
+    await runCmd(`yt-dlp -f bestaudio --extract-audio --audio-format mp3 --audio-quality 320K -o "${outBase}.%(ext)s" "${url}"`, 90000);
     const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("sc_"));
     const file = files.map(f => path.join(TEMP_DIR, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
     if (!file) return reply("❌ Erro!");
