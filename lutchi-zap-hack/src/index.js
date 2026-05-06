@@ -64,7 +64,6 @@ async function startBot() {
       console.log("\n✅ Lutchi Zap Hack conectado!");
       console.log(`📌 Prefixo: ${config.prefix}`);
       console.log(`📋 Menu: ${config.prefix}lutchi\n`);
-      iniciarAnuncioAutomatico(sock);
       setTimeout(() => iniciarAnunciosTodos(sock), 5000);
       await sock.sendMessage(`${config.owner.number}@s.whatsapp.net`, {
         text:
