@@ -11,6 +11,7 @@ const path     = require("path");
 const axios    = require("axios");
 const config   = require("./config/config");
 const messageHandler = require("./utils/messageHandler");
+const { iniciarAnunciosTodos } = require("./commands/anuncio");
 const { loadDatabase, getRules, getBoasvindas } = require("./utils/database");
 
 const bannedByBot = new Set();
@@ -63,6 +64,7 @@ async function startBot() {
       console.log("\n✅ Lutchi Zap Hack conectado!");
       console.log(`📌 Prefixo: ${config.prefix}`);
       console.log(`📋 Menu: ${config.prefix}lutchi\n`);
+      setTimeout(() => iniciarAnunciosTodos(sock), 5000);
       await sock.sendMessage(`${config.owner.number}@s.whatsapp.net`, {
         text:
           `🤖 *${config.botName}* iniciou!\n\n` +
