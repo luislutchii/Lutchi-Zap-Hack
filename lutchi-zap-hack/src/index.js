@@ -77,7 +77,6 @@ async function startBot() {
 
   // ── Mensagens ─────────────────────────────────────────────────
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    console.log("📩 Evento messages.upsert:", type, "| msgs:", messages.length);
     if (type !== "notify" && type !== "append") return;
     for (const msg of messages) {
       if (!msg.message) continue;
@@ -86,7 +85,6 @@ async function startBot() {
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text || "";
       if (msg.key.fromMe && !body.startsWith(".")) continue;
-      console.log("📨 Processando:", msg.key.remoteJid, "|", body.slice(0,30));
       await messageHandler(sock, msg, null);
     }
   });
