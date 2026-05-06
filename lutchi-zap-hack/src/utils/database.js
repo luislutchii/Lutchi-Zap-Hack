@@ -203,3 +203,15 @@ function getAntiStatus(groupId) {
 }
 
 module.exports = Object.assign(module.exports, { setAntiStatus, getAntiStatus });
+
+function setAntiCall(groupId, status) {
+  if (!db.anticall) db.anticall = {};
+  db.anticall[groupId] = status;
+  saveDatabase();
+}
+
+function getAntiCall(groupId) {
+  return db.anticall?.[groupId] || false;
+}
+
+module.exports = Object.assign(module.exports, { setAntiCall, getAntiCall });

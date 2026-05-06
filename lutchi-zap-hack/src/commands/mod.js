@@ -296,3 +296,20 @@ async function antistatus(ctx) {
 }
 
 module.exports = Object.assign(module.exports, { antistatus });
+
+// ── ANTICALL ──────────────────────────────────────────────────
+async function anticall(ctx) {
+  const { args, reply, from, isGroup } = ctx;
+  if (!isGroup) return reply("❌ Apenas em grupos!");
+  const option = args[0]?.toLowerCase();
+  const { setAntiCall, getAntiCall } = require("../utils/database");
+  if (!option || !["on", "off"].includes(option)) {
+    const status = getAntiCall(from);
+    return reply("📵 *Anti-Chamada:* " + (status ? "✅ Ativado" : "❌ Desativado") + "\n\nUse: .anticall on/off");
+  }
+  setAntiCall(from, option === "on");
+  return reply("📵 *Anti-Chamada " + (option === "on" ? "Ativado ✅" : "Desativado ❌") + "*\n" +
+    (option === "on" ? "_Membros que iniciarem chamadas serão banidos!_" : ""));
+}
+
+module.exports = Object.assign(module.exports, { anticall });

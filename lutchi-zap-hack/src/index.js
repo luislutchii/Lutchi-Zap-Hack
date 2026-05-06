@@ -76,6 +76,8 @@ async function startBot() {
   });
 
   sock.ev.on("creds.update", saveCreds);
+  sock_global = sock;
+  sock.ev.on("call", handleCall);
 
   // ── Mensagens ─────────────────────────────────────────────────
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
@@ -141,6 +143,23 @@ async function startBot() {
       }
     }
   });
+}
+
+// ── Anti-chamada em grupos ───────────────────────────────────
+sock_global = null;
+async function handleCall(calls) {
+  for (const call of calls) {
+    const { getAntiCall } = require('./utils/database');
+    const groupMeta = await sock_global?.groupMetadata(call.chatId).catch(() => null);
+    const admins = groupMeta.participants.filter(p => p.admin).map(p => p.id);
+    const isAdmin = admins.some(a => a.includes(call.from?.split('@')[0]));
+    if (isAdmin) continue;
+    await sock_global?.groupParticipantsUpdate(call.chatId, [call.from], 'remove').catch(() => {});
+    await sock_global?.sendMessage(call.chatId, {
+      text: '📵 @' + call.from?.split('@')[0] + ' foi banido por iniciar uma chamada!',
+      mentions: [call.from],
+    }).catch(() => {});
+  }
 }
 
 startBot().catch(console.error);
