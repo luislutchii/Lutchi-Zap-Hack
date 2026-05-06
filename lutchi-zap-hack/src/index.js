@@ -37,8 +37,14 @@ async function startBot() {
     logger: pino({ level: "silent" }),
     auth: state,
     browser: ["Lutchi Zap Hack", "Chrome", "1.0.0"],
-    generateHighQualityLinkPreview: true,
+    generateHighQualityLinkPreview: false,
     syncFullHistory: false,
+    markOnlineOnConnect: false,
+    retryRequestDelayMs: 2000,
+    maxMsgRetryCount: 3,
+    msgRetryCounterCache: {},
+    connectTimeoutMs: 60000,
+    keepAliveIntervalMs: 25000,
   });
 
   // ── Conexão ───────────────────────────────────────────────────
