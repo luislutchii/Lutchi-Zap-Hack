@@ -251,10 +251,31 @@ async function boasvindas(ctx) {
   );
 }
 
+
+async function antistatus(ctx) {
+  const { from, args, reply, isGroup } = ctx;
+  if (!isGroup) return reply("❌ Apenas em grupos!");
+  const { setAntiStatus, getAntiStatus } = require("../utils/database");
+  const option = args[0]?.toLowerCase();
+  if (!["on", "off"].includes(option)) {
+    const status = getAntiStatus(from);
+    return reply(
+      "🚫 *Anti-Status:* " + (status ? "✅ Ativado" : "❌ Desativado") + "\n\n" +
+      "_Quando ativado, membros que marcarem\no grupo no status serão banidos._\n\n" +
+      "Use: *.antistatus on/off*"
+    );
+  }
+  setAntiStatus(from, option === "on");
+  return reply(option === "on"
+    ? "🚫 *Anti-Status ativado!* ✅\n_Membros que marcarem o grupo no status serão banidos._"
+    : "🚫 *Anti-Status desativado!* ❌"
+  );
+}
+
 module.exports = {
   warn, warnings, resetwarn,
   mute, unmute,
   antilink, antiflood, antimention,
   banword, delbanword, limparbanword,
-  ligarbot, desligarbot, modobot, boasvindas,
+  ligarbot, desligarbot, modobot, boasvindas, antistatus,
 };

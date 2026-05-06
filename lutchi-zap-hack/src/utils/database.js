@@ -179,3 +179,15 @@ module.exports = {
   saveOwnerLid, getOwnerLid,
   isUserAdmin,
 };
+
+function setAntiStatus(groupId, value) {
+  if (!db.groups[groupId]) db.groups[groupId] = {};
+  db.groups[groupId].antiStatus = value;
+  saveDatabase();
+}
+
+function getAntiStatus(groupId) {
+  return db.groups[groupId]?.antiStatus || false;
+}
+
+module.exports = Object.assign(module.exports, { setAntiStatus, getAntiStatus });

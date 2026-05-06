@@ -169,6 +169,7 @@ async function routeCommand(command, ctx) {
     antilink:        () => modCommands.antilink(ctx),
     antiflood:       () => modCommands.antiflood(ctx),
     antimention:     () => modCommands.antimention(ctx),
+    antistatus:      () => modCommands.antistatus(ctx),
     banword:         () => modCommands.banword(ctx),
     delbanword:      () => modCommands.delbanword ? modCommands.delbanword(ctx) : ctx.reply("🔧 Em breve!"),
     limparbanword:   () => modCommands.limparbanword ? modCommands.limparbanword(ctx) : ctx.reply("🔧 Em breve!"),
