@@ -4,7 +4,10 @@ const GROUP_CACHE_TTL = 5 * 60 * 1000;
 async function getGroupMeta(sock, groupId) {
   const cached = groupMetaCache.get(groupId);
   if (cached && Date.now() - cached.ts < GROUP_CACHE_TTL) return cached.data;
-  const meta = await sock.groupMetadata(groupId).catch(() => null);
+  const meta = await Promise.race([
+    sock.groupMetadata(groupId),
+    new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000))
+  ]).catch(() => null);
   if (meta) groupMetaCache.set(groupId, { data: meta, ts: Date.now() });
   return meta;
 }
@@ -103,9 +106,9 @@ async function messageHandler(sock, msg, store) {
       return;
     }
 
-    const args    = body.slice(config.prefix.length).trim().split(/\s+/);
-    const command = args[0].toLowerCase();
-    args.shift();
+    const parts   = body.slice(config.prefix.length).trim().split(/\s+/);
+    const command = parts[0].toLowerCase();
+    const args    = parts.slice(1);
 
     let groupMeta = null, isAdmin = false, isBotAdmin = false;
     if (isGroup) {

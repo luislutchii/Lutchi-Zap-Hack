@@ -4,19 +4,21 @@ const {
   DisconnectReason,
   fetchLatestBaileysVersion,
 } = require("@whiskeysockets/baileys");
-const pino     = require("pino");
-const qrcode   = require("qrcode-terminal");
-const { Boom } = require("@hapi/boom");
-const path     = require("path");
-const axios    = require("axios");
-const config   = require("./config/config");
+const pino      = require("pino");
+const qrcode    = require("qrcode-terminal");
+const { Boom }  = require("@hapi/boom");
+const path      = require("path");
+const axios     = require("axios");
 const NodeCache = require("node-cache");
+const config    = require("./config/config");
 const messageHandler = require("./utils/messageHandler");
+const { loadDatabase, getRules, getBoasVindas } = require("./utils/database");
 const { iniciarAnunciosTodos } = require("./commands/anuncio");
-const { loadDatabase, getRules, getBoasvindas } = require("./utils/database");
 
-const bannedByBot = new Set();
-global.bannedByBot = bannedByBot;
+global.bannedByBot = new Set();
+
+// Controla reconexões para evitar listeners duplicados
+let isConnected = false;
 
 async function startBot() {
   console.log(`
@@ -34,45 +36,49 @@ async function startBot() {
   loadDatabase();
 
   const msgRetryCounterCache = new NodeCache();
+
   const sock = makeWASocket({
     version,
     logger: pino({ level: "silent" }),
     auth: state,
-    browser: ["Ubuntu", "Chrome", "20.0.04"],
+    browser: ["Lutchi Zap Hack", "Chrome", "1.0.0"],
     generateHighQualityLinkPreview: false,
     syncFullHistory: false,
-    markOnlineOnConnect: false,
-    retryRequestDelayMs: 2000,
-    maxMsgRetryCount: 3,
-    msgRetryCounterCache: msgRetryCounterCache,
+    keepAliveIntervalMs: 15000,
     connectTimeoutMs: 60000,
-    keepAliveIntervalMs: 25000,
+    msgRetryCounterCache,
   });
 
-  // ── Conexão ───────────────────────────────────────────────────
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
       console.log("\n📱 Escaneie o QR Code abaixo:\n");
       qrcode.generate(qr, { small: true });
-      console.log("\n🔗 WhatsApp → Aparelhos Conectados → Conectar Aparelho\n");
     }
 
     if (connection === "close") {
+      isConnected = false;
       const code = new Boom(lastDisconnect?.error)?.output?.statusCode;
-      if (code !== DisconnectReason.loggedOut) {
-        console.log("🔄 Reconectando em 5s...");
-        setTimeout(() => startBot(), 5000);
-      } else {
+      console.log(`\n❌ Conexão encerrada. Código: ${code}`);
+
+      if (code === DisconnectReason.loggedOut) {
         console.log("🚪 Sessão encerrada. Delete data/session e reinicie.");
         process.exit(0);
       }
+
+      const delay = code === 428 ? 10000 : 5000;
+      console.log(`🔄 Reconectando em ${delay/1000}s...\n`);
+      setTimeout(() => startBot(), delay);
+
     } else if (connection === "open") {
+      if (isConnected) return; // evita duplicar ao reconectar
+      isConnected = true;
+
       console.log("\n✅ Lutchi Zap Hack conectado!");
       console.log(`📌 Prefixo: ${config.prefix}`);
       console.log(`📋 Menu: ${config.prefix}lutchi\n`);
-      // setTimeout(() => iniciarAnunciosTodos(sock), 5000);
+
       await sock.sendMessage(`${config.owner.number}@s.whatsapp.net`, {
         text:
           `🤖 *${config.botName}* iniciou!\n\n` +
@@ -80,42 +86,35 @@ async function startBot() {
           `📋 Menu: *${config.prefix}lutchi*\n` +
           `🕐 ${new Date().toLocaleString("pt-AO")}`,
       }).catch(() => {});
+
+      setTimeout(() => iniciarAnunciosTodos(sock), 8000);
     }
   });
 
   sock.ev.on("creds.update", saveCreds);
-  
-  // ── Mensagens ─────────────────────────────────────────────────
+
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    console.log("📨 upsert type:", type, "msgs:", messages.length);
-    if (type === "notify") console.log("📨 NOTIFY MSG:", JSON.stringify(messages[0]?.key, null, 2));
     if (type !== "notify") return;
     for (const msg of messages) {
-      if (!msg.message) continue;
-      if (msg.key.remoteJid === "status@broadcast") continue;
-      if (msg.key.fromMe) continue;
-      await messageHandler(sock, msg, null);
+      if (!msg.message || msg.key.fromMe) continue;
+      await messageHandler(sock, msg, null).catch(e => console.error("❌ Handler:", e.message));
     }
   });
 
-  // ── Entradas / Saídas ─────────────────────────────────────────
-  // ── Anti-Call ─────────────────────────────────────────────
   sock.ev.on("call", async (calls) => {
     for (const call of calls) {
       if (!call.isGroup || call.status !== "offer") continue;
-      const { getAntiCall } = require("./commands/mod");
-      // getAntiCall via database
-      const { getAntiCall: getAC } = require("./utils/database");
-      if (!getAC(call.chatId)) continue;
+      const { getAntiCall } = require("./utils/database");
+      if (!getAntiCall(call.chatId)) continue;
       const caller = call.from;
       const num    = caller.split("@")[0].replace(/:.*/, "");
       global.bannedByBot?.add(caller);
+      await sock.rejectCall(call.id, call.from).catch(() => {});
       await sock.sendMessage(call.chatId, {
-        text: "📵 *ANTI-CALL*\n\n@" + num + " foi *banido* por fazer uma chamada no grupo!",
+        text: `📵 *ANTI-CALL*\n\n@${num} foi *banido* por fazer uma chamada no grupo!`,
         mentions: [caller],
       }).catch(() => {});
       await sock.groupParticipantsUpdate(call.chatId, [caller], "remove").catch(() => {});
-      await sock.rejectCall(call.id, call.from).catch(() => {});
     }
   });
 
@@ -124,59 +123,44 @@ async function startBot() {
     if (!groupMeta) return;
 
     for (const participant of participants) {
-      const num = (typeof participant === "string" ? participant : (participant?.id || participant?.jid || "")).split("@")[0];
+      const jid = typeof participant === "string" ? participant : participant?.id || "";
+      const num = jid.includes("@") ? jid.split("@")[0] : jid;
 
       if (action === "add") {
-        if (!getBoasvindas(id)) continue;
-
+        if (!getBoasVindas(id)) continue;
         const regras      = getRules(id) || config.defaultRules;
         const welcomeText =
           `👋 *Bem-vindo(a)* @${num} ao *${groupMeta.subject}*!\n\n` +
           `📸 Por favor apresenta-te com:\n` +
-          `› 👤 *Nome:*\n` +
-          `› 🎂 *Idade:*\n` +
-          `› 📍 *Morada:*\n` +
-          `› 🌍 *País:*\n\n` +
+          `› 👤 *Nome:*\n› 🎂 *Idade:*\n› 📍 *Morada:*\n› 🌍 *País:*\n\n` +
           `📋 *REGRAS DO GRUPO:*\n${regras}\n\n` +
           `_🤖 Lutchi Zap Hack_`;
-
         try {
-          const ppUrl = await sock.profilePictureUrl(participant, "image").catch(() => null);
+          const ppUrl = await sock.profilePictureUrl(jid, "image").catch(() => null);
           if (ppUrl) {
             const res = await axios.get(ppUrl, { responseType: "arraybuffer", timeout: 8000 });
-            await sock.sendMessage(id, {
-              image: Buffer.from(res.data),
-              caption: welcomeText,
-              mentions: [participant],
-            });
+            await sock.sendMessage(id, { image: Buffer.from(res.data), caption: welcomeText, mentions: [jid] });
           } else {
-            await sock.sendMessage(id, { text: welcomeText, mentions: [participant] });
+            await sock.sendMessage(id, { text: welcomeText, mentions: [jid] });
           }
         } catch {
-          await sock.sendMessage(id, { text: welcomeText, mentions: [participant] }).catch(() => {});
+          await sock.sendMessage(id, { text: welcomeText, mentions: [jid] }).catch(() => {});
         }
 
       } else if (action === "remove") {
-        if (global.bannedByBot.has(participant)) {
-          global.bannedByBot.delete(participant);
+        if (global.bannedByBot.has(jid)) {
+          global.bannedByBot.delete(jid);
           continue;
         }
         await sock.sendMessage(id, {
           text: `😢 @${num} saiu do grupo.`,
-          mentions: [participant],
+          mentions: [jid],
         }).catch(() => {});
       }
     }
   });
 }
 
-
-
 startBot().catch(console.error);
 process.on("uncaughtException",  (err) => console.error("❌", err.message));
 process.on("unhandledRejection", (err) => console.error("❌", err?.message || err));
-
-
-
-// DEBUG TEMPORÁRIO - remover depois
-process.on('message', () => {});
