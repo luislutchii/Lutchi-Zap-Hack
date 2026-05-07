@@ -1,20 +1,50 @@
 const config = require("../config/config");
+const fs = require("fs");
+const path = require("path");
 
-const ANUNCIO_TEXT =
-  "Siga o Instagram do Bot com humildade\n" +
-  "https://instagram.com/luislutchii";
+const STATUS_FILE = path.join(__dirname, "../../data/anuncio_status.json");
+
+// Carregar status do arquivo
+function carregarStatus() {
+  try {
+    if (fs.existsSync(STATUS_FILE)) {
+      return JSON.parse(fs.readFileSync(STATUS_FILE, "utf8"));
+    }
+  } catch (e) {}
+  return {};
+}
+
+// Salvar status no arquivo
+function salvarStatus(status) {
+  try {
+    const dir = path.dirname(STATUS_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(STATUS_FILE, JSON.stringify(status, null, 2));
+  } catch (e) {}
+}
 
 const anuncioStatus = new Map();
 const anuncioTimers = new Map();
 
-// Envia anúncio com menção silenciosa (sem listar nomes)
+// Inicializar status do arquivo
+function initStatus() {
+  const saved = carregarStatus();
+  for (const [groupId, status] of Object.entries(saved)) {
+    anuncioStatus.set(groupId, status);
+  }
+}
+
+// ANUNCIO_TEXT fixo (ou pode ser personalizado depois)
+const ANUNCIO_TEXT = "Siga o Instagram do Bot com humildade\nhttps://instagram.com/luislutchii";
+
+// Envia anúncio com menção silenciosa
 async function enviarAnuncio(sock, groupId) {
   try {
     const meta = await sock.groupMetadata(groupId).catch(() => null);
     if (!meta) return;
 
     // Só envia se o bot for administrador
-    const botId  = (sock.user?.id ?? "").replace(/:.*@/, "@").replace(/@.*/, "");
+    const botId = (sock.user?.id ?? "").replace(/:.*@/, "@").replace(/@.*/, "");
     const botLid = (sock.user?.lid ?? "").replace(/:.*@/, "@").replace(/@.*/, "");
     const isBotAdmin = meta.participants
       .filter(p => p.admin)
@@ -35,7 +65,6 @@ async function enviarAnuncio(sock, groupId) {
 
 function iniciarAnuncio(sock, groupId) {
   if (anuncioTimers.has(groupId)) return;
-  // Envia imediatamente ao iniciar
   enviarAnuncio(sock, groupId);
   const interval = setInterval(() => {
     if (anuncioStatus.get(groupId) === false) return;
@@ -81,28 +110,32 @@ async function anuncio(ctx) {
       "Use:\n" +
       "• *.anuncio off* — desativar\n" +
       "• *.anuncio on* — ativar\n" +
-      "• *.anuncio agora* — enviar agora"
+      "• *.anuncio agora* — enviar agora\n\n" +
+      "💡 *Dica:* O dono pode usar .anunciar para enviar mensagens apenas para grupos com anúncio ativo!"
     );
   }
 
   if (option === "off") {
     anuncioStatus.set(from, false);
     pararAnuncio(from);
-    return reply("📢 *Anúncio desativado!* ❌");
+    salvarStatus(Object.fromEntries(anuncioStatus));
+    return reply("📢 *Anúncio desativado!* ❌\n\nEste grupo não receberá mais anúncios automáticos.");
   }
 
   if (option === "on") {
     anuncioStatus.set(from, true);
+    salvarStatus(Object.fromEntries(anuncioStatus));
     iniciarAnuncio(sock, from);
     return reply("📢 *Anúncio ativado!* ✅\n_Enviado a cada 30 minutos com menção silenciosa._");
   }
 
   if (option === "agora") {
     await enviarAnuncio(sock, from);
-    return reply("✅ Anúncio enviado!");
+    return reply("✅ Anúncio enviado neste grupo!");
   }
 
   return reply("❌ Use: .anuncio on/off/agora");
 }
 
-module.exports = { anuncio, iniciarAnunciosTodos, iniciarAnuncio };
+// Exportar também o status para outros módulos
+module.exports = { anuncio, iniciarAnunciosTodos, iniciarAnuncio, getAnuncioStatus: () => Object.fromEntries(anuncioStatus), initStatus };
