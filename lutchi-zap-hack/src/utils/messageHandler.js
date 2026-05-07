@@ -1,3 +1,14 @@
+
+const groupMetaCache = new Map();
+const GROUP_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+async function getGroupMeta(sock, groupId) {
+  const cached = groupMetaCache.get(groupId);
+  if (cached && Date.now() - cached.ts < GROUP_CACHE_TTL) return cached.data;
+  const meta = await sock.groupMetadata(groupId).catch(() => null);
+  if (meta) groupMetaCache.set(groupId, { data: meta, ts: Date.now() });
+  return meta;
+}
 const config = require("../config/config");
 const { getAntiLink, getAntiFlood, getBanwords, isMuted, getAntiMention, isUserAdmin } = require("./database");
 
@@ -93,7 +104,7 @@ async function messageHandler(sock, msg, store) {
 
     let groupMeta = null, isAdmin = false, isBotAdmin = false;
     if (isGroup) {
-      groupMeta = await sock.groupMetadata(from).catch(() => null);
+      groupMeta = await getGroupMeta(sock, from);
       if (groupMeta) {
         const senderPhone = normalizeId(sender);
         const botPhone    = normalizeId(sock.user?.id ?? "");
@@ -242,7 +253,7 @@ async function passiveModeration(sock, msg, from, sender, body, messageContent) 
   try {
     // Anti-mentção a admins
     if (getAntiMention(from)) {
-      const groupMeta = await sock.groupMetadata(from).catch(() => null);
+      const groupMeta = await getGroupMeta(sock, from);
       if (groupMeta) {
         const mentioned = messageContent?.extendedTextMessage?.contextInfo?.mentionedJid || [];
         const admins = groupMeta.participants.filter(p => p.admin).map(p => p.id);
@@ -276,7 +287,7 @@ async function passiveModeration(sock, msg, from, sender, body, messageContent) 
   // ==============================================================
   if (getAntiLink(from) && /(https?:\/\/|www\.|chat\.whatsapp\.com)/gi.test(body)) {
     // Obter metadata do grupo para verificar quem é admin
-    const groupMeta = await sock.groupMetadata(from).catch(() => null);
+    const groupMeta = await getGroupMeta(sock, from);
     let isAdminUser = false;
     
     if (groupMeta) {
