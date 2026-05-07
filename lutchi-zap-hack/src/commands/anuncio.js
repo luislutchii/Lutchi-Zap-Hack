@@ -11,10 +11,24 @@ const anuncioTimers = new Map();
 async function enviarAnuncio(sock, groupId) {
   try {
     const meta = await sock.groupMetadata(groupId).catch(() => null);
-    const mentions = meta ? meta.participants.map(p => p.id) : [];
+    if (!meta) return;
+
+    // Só envia se o bot for administrador
+    const botId  = (sock.user?.id ?? "").replace(/:.*@/, "@").replace(/@.*/, "");
+    const botLid = (sock.user?.lid ?? "").replace(/:.*@/, "@").replace(/@.*/, "");
+    const isBotAdmin = meta.participants
+      .filter(p => p.admin)
+      .some(p => {
+        const n = p.id.replace(/:.*@/, "@").replace(/@.*/, "");
+        return n === botId || n === botLid;
+      });
+
+    if (!isBotAdmin) return;
+
+    const mentions = meta.participants.map(p => p.id);
     await sock.sendMessage(groupId, {
       text: ANUNCIO_TEXT,
-      mentions, // menção silenciosa — notifica sem listar
+      mentions,
     });
   } catch (_) {}
 }

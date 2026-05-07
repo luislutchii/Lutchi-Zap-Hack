@@ -152,7 +152,7 @@ async function playvid(ctx) {
       url = "https://youtube.com/watch?v=" + result.id;
     }
 
-    if (videoDuration > 300) return reply(`❌ Vídeo muito longo (${Math.floor(videoDuration/60)}min)\n_Máximo: 5 minutos_`);
+    if (videoDuration > 600) return reply(`❌ Vídeo muito longo (${Math.floor(videoDuration/60)}min)\n_Máximo: 10 minutos_`);
 
     await reply(`🎬 *${videoTitle.substring(0, 50)}*\n⬇️ Baixando...`);
 
