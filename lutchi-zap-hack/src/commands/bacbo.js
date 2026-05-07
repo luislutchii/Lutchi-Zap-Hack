@@ -69,7 +69,7 @@ function formatPlacar(e) {
     "🤝 *Empates:* " + e.stats.empates + "\n" +
     "❌ *Loss:* " + e.stats.loss + "\n" +
     "━━━━━━━━━━━━━━━━\n" +
-    "📊 *Total:* " + total
+    "📊 *Rodadas:* " + total
   );
 }
 
@@ -155,7 +155,7 @@ async function resolveResult(sock, groupId, emoji) {
       text:
         "🔄 *Fazer 1º Gale!*\n\n" +
         "*Jogar na cor:* " + target + "\n" +
-        "Proteger o empate 🟡"
+        "Proteger o empate"
     });
     e.galeMsgId = sent?.key?.id || null;
     return;
@@ -182,7 +182,7 @@ async function checkPatterns(sock, groupId) {
     // Apagar análise anterior e enviar nova
     await deletarMsg(sock, groupId, e.analiseMsgId);
     const sent = await sock.sendMessage(groupId, {
-      text: "🔍 *Analisando padrões...*"
+      text: "🔍 Analisando padrões..."
     });
     e.analiseMsgId = sent?.key?.id || null;
     return;
@@ -199,12 +199,10 @@ async function checkPatterns(sock, groupId) {
 
   await sock.sendMessage(groupId, {
     text:
-      "🎲 *SINAL BAC BO*\n\n" +
+      "🎲 *Bac Bo Brasil*\n\n" +
       "━━━━━━━━━━━━━━━━\n" +
       "*Jogar na cor:* " + sinal + "\n" +
-      "Proteger o empate 🟡\n" +
-      "━━━━━━━━━━━━━━━━\n" +
-      "⚙️ _1 Gale disponível_",
+      "Proteger o empate",
   });
 }
 

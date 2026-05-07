@@ -10,8 +10,8 @@ module.exports = {
   owner: {
     name: "Luís Lutchi",
     number: "244924319522",
+    lid: "161899094274260",
     instagram: "luislutchii",
-    lid: "161899094274260",  // LID do dono (WhatsApp novo sistema)
   },
   // Limite antiflood: mensagens por segundo
   floodLimit: 5,

@@ -38,13 +38,13 @@ async function startBot() {
     version,
     logger: pino({ level: "silent" }),
     auth: state,
-    browser: ["Lutchi Zap Hack", "Chrome", "1.0.0"],
+    browser: ["Ubuntu", "Chrome", "20.0.04"],
     generateHighQualityLinkPreview: false,
     syncFullHistory: false,
     markOnlineOnConnect: false,
     retryRequestDelayMs: 2000,
     maxMsgRetryCount: 3,
-    msgRetryCounterCache: {},
+    msgRetryCounterCache: msgRetryCounterCache,
     connectTimeoutMs: 60000,
     keepAliveIntervalMs: 25000,
   });
@@ -72,7 +72,7 @@ async function startBot() {
       console.log("\n✅ Lutchi Zap Hack conectado!");
       console.log(`📌 Prefixo: ${config.prefix}`);
       console.log(`📋 Menu: ${config.prefix}lutchi\n`);
-      setTimeout(() => iniciarAnunciosTodos(sock), 5000);
+      // setTimeout(() => iniciarAnunciosTodos(sock), 5000);
       await sock.sendMessage(`${config.owner.number}@s.whatsapp.net`, {
         text:
           `🤖 *${config.botName}* iniciou!\n\n` +
@@ -89,14 +89,11 @@ async function startBot() {
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     console.log("📨 upsert type:", type, "msgs:", messages.length);
     if (type === "notify") console.log("📨 NOTIFY MSG:", JSON.stringify(messages[0]?.key, null, 2));
-    if (type !== "notify" && type !== "append") return;
+    if (type !== "notify") return;
     for (const msg of messages) {
       if (!msg.message) continue;
       if (msg.key.remoteJid === "status@broadcast") continue;
-      const body =
-        msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text || "";
-      if (msg.key.fromMe && !body.startsWith(".")) continue;
+      if (msg.key.fromMe) continue;
       await messageHandler(sock, msg, null);
     }
   });
@@ -180,3 +177,6 @@ process.on("uncaughtException",  (err) => console.error("❌", err.message));
 process.on("unhandledRejection", (err) => console.error("❌", err?.message || err));
 
 
+
+// DEBUG TEMPORÁRIO - remover depois
+process.on('message', () => {});

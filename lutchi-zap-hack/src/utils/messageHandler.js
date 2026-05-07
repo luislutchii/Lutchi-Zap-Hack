@@ -1,6 +1,5 @@
-
 const groupMetaCache = new Map();
-const GROUP_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+const GROUP_CACHE_TTL = 5 * 60 * 1000;
 
 async function getGroupMeta(sock, groupId) {
   const cached = groupMetaCache.get(groupId);
@@ -9,18 +8,19 @@ async function getGroupMeta(sock, groupId) {
   if (meta) groupMetaCache.set(groupId, { data: meta, ts: Date.now() });
   return meta;
 }
-const config = require("../config/config");
-const { getAntiLink, getAntiFlood, getBanwords, isMuted, getAntiMention, isUserAdmin } = require("./database");
 
-const infoCommands     = require("../commands/info");
-const adminCommands    = require("../commands/admin");
-const modCommands      = require("../commands/mod");
-const downloadCommands = require("../commands/downloads");
-const stickerCommands  = require("../commands/stickers");
-const pesquisaCommands = require("../commands/pesquisas");
+const config = require("../config/config");
+const { getAntiLink, getAntiFlood, getBanwords, isMuted, getAntiMention } = require("./database");
+
+const infoCommands        = require("../commands/info");
+const adminCommands       = require("../commands/admin");
+const modCommands         = require("../commands/mod");
+const downloadCommands    = require("../commands/downloads");
+const stickerCommands     = require("../commands/stickers");
+const pesquisaCommands    = require("../commands/pesquisas");
 const brincadeiraCommands = require("../commands/brincadeiras");
-const ownerCommands    = require("../commands/owner");
-const bacboCommands    = require("../commands/bacbo");
+const ownerCommands       = require("../commands/owner");
+const bacboCommands       = require("../commands/bacbo");
 const extrasCommands      = require("../commands/extras");
 const debateCommands      = require("../commands/debate");
 const anuncioCommands     = require("../commands/anuncio");
@@ -85,6 +85,10 @@ function extractBody(msg) {
 }
 
 async function messageHandler(sock, msg, store) {
+  const skipTypes = ["senderKeyDistributionMessage", "reactionMessage", "messageContextInfo", "protocolMessage"];
+  const msgType = Object.keys(msg.message || {})[0];
+  if (skipTypes.includes(msgType)) return;
+
   try {
     const messageContent = msg.message;
     if (!messageContent) return;
@@ -108,8 +112,8 @@ async function messageHandler(sock, msg, store) {
       groupMeta = await getGroupMeta(sock, from);
       if (groupMeta) {
         const senderPhone = normalizeId(sender);
-        const botPhone    = normalizeId(sock.user?.id ?? "");
         const senderLid   = normalizeId(msg.key?.participant ?? "");
+        const botPhone    = normalizeId(sock.user?.id ?? "");
         const botLid      = normalizeId(sock.user?.lid ?? "");
         const admins      = groupMeta.participants.filter(p => p.admin);
         isAdmin    = admins.some(p => matchParticipant(p.id, senderPhone, senderLid));
@@ -119,7 +123,7 @@ async function messageHandler(sock, msg, store) {
 
     const isOwner = checkIsOwner(sender, groupMeta);
 
-    if (isGroup && !isAdmin && !isOwner) return;
+    if (isGroup && !isAdmin && !isOwner && !PUBLIC_COMMANDS.has(command)) return;
 
     const ctx = {
       sock, msg, from, sender, args, body,
@@ -129,9 +133,7 @@ async function messageHandler(sock, msg, store) {
     };
 
     try {
-      await sock.sendMessage(from, {
-        react: { text: "✅", key: msg.key }
-      });
+      await sock.sendMessage(from, { react: { text: "✅", key: msg.key } });
     } catch (_) {}
 
     await routeCommand(command, ctx);
@@ -198,7 +200,7 @@ async function routeCommand(command, ctx) {
     facebook:        () => downloadCommands.facebook(ctx),
     kwai:            () => downloadCommands.kwai(ctx),
     spotify:         () => downloadCommands.spotify(ctx),
-    soundcloud:      () => downloadCommands.soundcloud(ctx),
+    soundcloud:      () => downloadCommands.soundCommand(ctx),
     mediafire:       () => downloadCommands.mediafire(ctx),
     tomp3:           () => downloadCommands.tomp3(ctx),
     revelarft:       () => downloadCommands.revelarft(ctx),
@@ -242,18 +244,16 @@ async function routeCommand(command, ctx) {
     perfil:          () => brincadeiraCommands.perfil(ctx),
     tabela:          () => brincadeiraCommands.tabela(ctx),
     ddd:             () => brincadeiraCommands.ddd(ctx),
-    debate:          () => brincadeiraCommands.debate(ctx),
     bacbo:           () => bacboCommands.bacbo(ctx),
   };
 
   const handler = routes[command];
   if (handler) return handler();
-  await ctx.reply("❌ Comando *" + command + "* não encontrado!\n\nDigite *" + config.menuPrefix + "* para ver o menu.");
+  await ctx.reply("❌ Comando *" + command + "* não encontrado!\n\nDigite *.lutchi* para ver o menu.");
 }
 
 async function passiveModeration(sock, msg, from, sender, body, messageContent) {
   try {
-    // Anti-mentção a admins
     if (getAntiMention(from)) {
       const groupMeta = await getGroupMeta(sock, from);
       if (groupMeta) {
@@ -265,7 +265,7 @@ async function passiveModeration(sock, msg, from, sender, body, messageContent) 
         );
         const senderIsAdmin = admins.some(a => normalizeId(a) === normalizeId(sender));
         const senderIsOwner = checkIsOwner(sender, groupMeta);
-        if (mentionedAdmin && senderIsAdmin === false && senderIsOwner === false) {
+        if (mentionedAdmin && !senderIsAdmin && !senderIsOwner) {
           await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
           await sock.groupParticipantsUpdate(from, [sender], "remove").catch(() => {});
           await sock.sendMessage(from, {
@@ -278,47 +278,31 @@ async function passiveModeration(sock, msg, from, sender, body, messageContent) 
     }
   } catch (_) {}
 
-  // Anti-mute
   if (isMuted(from, sender)) {
     await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
     return;
   }
 
-  // ==============================================================
-  // 🔗 ANTI-LINK COM BAN (remove link + expulsa o membro)
-  // ==============================================================
   if (getAntiLink(from) && /(https?:\/\/|www\.|chat\.whatsapp\.com)/gi.test(body)) {
-    // Obter metadata do grupo para verificar quem é admin
     const groupMeta = await getGroupMeta(sock, from);
     let isAdminUser = false;
-    
     if (groupMeta) {
       const senderPhone = normalizeId(sender);
-      const senderLid = normalizeId(msg.key?.participant ?? "");
-      const admins = groupMeta.participants.filter(p => p.admin);
+      const senderLid   = normalizeId(msg.key?.participant ?? "");
+      const admins      = groupMeta.participants.filter(p => p.admin);
       isAdminUser = admins.some(p => matchParticipant(p.id, senderPhone, senderLid));
     }
-    
-    // Se NÃO for administrador, aplica a punição com BAN
     if (!isAdminUser) {
-      // 1. Deletar a mensagem com link
       await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
-      
-      // 2. Banir/Expulsar o membro do grupo
       await sock.groupParticipantsUpdate(from, [sender], "remove").catch(() => {});
-      
-      // 3. Avisar o grupo sobre o banimento
       await sock.sendMessage(from, {
         text: "🔨 @" + normalizeId(sender) + " foi *BANIDO* por enviar link!\n\n📌 *Regra:* Links não são permitidos para membros comuns.\n👑 *Administradores* estão liberados.",
         mentions: [sender],
       }).catch(() => {});
-      
       return;
     }
-    // Se for administrador, simplesmente deixa a mensagem passar (não faz nada)
   }
 
-  // Anti-flood
   if (getAntiFlood(from)) {
     const key = from + ":" + sender;
     const now = Date.now();
@@ -334,7 +318,6 @@ async function passiveModeration(sock, msg, from, sender, body, messageContent) 
     }
   }
 
-  // Banwords
   const banwords = getBanwords(from);
   if (banwords.length > 0 && banwords.some(w => body.toLowerCase().includes(w))) {
     await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
