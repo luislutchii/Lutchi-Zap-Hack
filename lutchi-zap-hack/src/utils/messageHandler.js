@@ -20,6 +20,7 @@ const stickerCommands  = require("../commands/stickers");
 const pesquisaCommands = require("../commands/pesquisas");
 const brincadeiraCommands = require("../commands/brincadeiras");
 const ownerCommands    = require("../commands/owner");
+const bacboCommands    = require("../commands/bacbo");
 const extrasCommands      = require("../commands/extras");
 const debateCommands      = require("../commands/debate");
 const anuncioCommands     = require("../commands/anuncio");
@@ -242,6 +243,7 @@ async function routeCommand(command, ctx) {
     tabela:          () => brincadeiraCommands.tabela(ctx),
     ddd:             () => brincadeiraCommands.ddd(ctx),
     debate:          () => brincadeiraCommands.debate(ctx),
+    bacbo:           () => bacboCommands.bacbo(ctx),
   };
 
   const handler = routes[command];
