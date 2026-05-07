@@ -1,15 +1,8 @@
 const config = require("../config/config");
 
 const ANUNCIO_TEXT =
-  "📢 *ANÚNCIO DO LUTCHI ZAP HACK* 📢\n\n" +
-  "🤖 Este grupo usa o *Lutchi Zap Hack*\n" +
-  "o bot mais completo de Angola! 🇦🇴\n\n" +
-  "📸 Segue o criador no Instagram:\n" +
-  "👉 https://instagram.com/luislutchii\n\n" +
-  "⚡ *@luislutchii* — Luís Lutchi\n" +
-  "_Desenvolvedor do Lutchi Zap Hack_\n\n" +
-  "━━━━━━━━━━━━━━━━━━━━━\n" +
-  "🌐 github.com/luislutchii/Lutchi-Zap-Hack";
+  "Siga o Instagram do Bot com humildade\n" +
+  "https://instagram.com/luislutchii";
 
 const anuncioStatus = new Map();
 const anuncioTimers = new Map();
