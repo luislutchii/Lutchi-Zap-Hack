@@ -10,6 +10,7 @@ const { Boom } = require("@hapi/boom");
 const path     = require("path");
 const axios    = require("axios");
 const config   = require("./config/config");
+const NodeCache = require("node-cache");
 const messageHandler = require("./utils/messageHandler");
 const { iniciarAnunciosTodos } = require("./commands/anuncio");
 const { loadDatabase, getRules, getBoasvindas } = require("./utils/database");
@@ -32,6 +33,7 @@ async function startBot() {
 
   loadDatabase();
 
+  const msgRetryCounterCache = new NodeCache();
   const sock = makeWASocket({
     version,
     logger: pino({ level: "silent" }),
@@ -85,6 +87,8 @@ async function startBot() {
   
   // ── Mensagens ─────────────────────────────────────────────────
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    console.log("📨 upsert type:", type, "msgs:", messages.length);
+    if (type === "notify") console.log("📨 NOTIFY MSG:", JSON.stringify(messages[0]?.key, null, 2));
     if (type !== "notify" && type !== "append") return;
     for (const msg of messages) {
       if (!msg.message) continue;

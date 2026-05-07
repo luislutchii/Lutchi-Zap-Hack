@@ -155,7 +155,7 @@ async function resolveResult(sock, groupId, emoji) {
       text:
         "🔄 *Fazer 1º Gale!*\n\n" +
         "*Jogar na cor:* " + target + "\n" +
-        "Proteger o empate"
+        "Proteger o empate 🟡"
     });
     e.galeMsgId = sent?.key?.id || null;
     return;
@@ -199,10 +199,12 @@ async function checkPatterns(sock, groupId) {
 
   await sock.sendMessage(groupId, {
     text:
-      "🎲 *Bac Bo Brasil*\n\n" +
+      "🎲 *SINAL BAC BO*\n\n" +
       "━━━━━━━━━━━━━━━━\n" +
       "*Jogar na cor:* " + sinal + "\n" +
-      "Proteger o empate"
+      "Proteger o empate 🟡\n" +
+      "━━━━━━━━━━━━━━━━\n" +
+      "⚙️ _1 Gale disponível_",
   });
 }
 
