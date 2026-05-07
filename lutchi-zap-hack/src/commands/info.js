@@ -90,6 +90,12 @@ async function lutchi(ctx) {
     "│ " + p + "fimdebate\n" +
     "╰──────────────────────\n\n" +
 
+    "╭──「 🎰 *CASINO* (Dono) 」\n" +
+    "│ " + p + "bacbo on/off\n" +
+    "│ " + p + "bacbo placar\n" +
+    "│ " + p + "bacbo reset\n" +
+    "╰──────────────────────\n\n" +
+
     "╭──「 📥 *DOWNLOADS* 」\n" +
     "│ " + p + "play <nome da música>\n" +
     "│ " + p + "playvid <nome do vídeo>\n" +
