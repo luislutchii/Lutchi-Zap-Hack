@@ -79,7 +79,6 @@ async function lutchi(ctx) {
     "│ " + p + "ligarbot\n" +
     "│ " + p + "desligarbot\n" +
     "│ " + p + "modobot todos/admins\n" +
-    "│ " + p + "anuncio on/off/agora\n" +
     "╰──────────────────────\n\n" +
 
     "╭──「 🎙️ *DEBATE* 」\n" +

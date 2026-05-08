@@ -13,7 +13,6 @@ const NodeCache = require("node-cache");
 const config    = require("./config/config");
 const messageHandler = require("./utils/messageHandler");
 const { loadDatabase, getRules, getBoasVindas } = require("./utils/database");
-const { iniciarAnunciosTodos } = require("./commands/anuncio");
 
 global.bannedByBot = new Set();
 
@@ -44,9 +43,11 @@ async function startBot() {
     browser: ["Lutchi Zap Hack", "Chrome", "1.0.0"],
     generateHighQualityLinkPreview: false,
     syncFullHistory: false,
-    keepAliveIntervalMs: 15000,
+    markOnlineOnConnect: false,
     connectTimeoutMs: 60000,
-    msgRetryCounterCache,
+    keepAliveIntervalMs: 10000,
+    retryRequestDelayMs: 250,
+    maxMsgRetryCount: 5,
   });
 
   sock.ev.on("connection.update", async (update) => {
@@ -86,16 +87,18 @@ async function startBot() {
           `📋 Menu: *${config.prefix}lutchi*\n` +
           `🕐 ${new Date().toLocaleString("pt-AO")}`,
       }).catch(() => {});
-
-      setTimeout(() => iniciarAnunciosTodos(sock), 8000);
     }
   });
 
   sock.ev.on("creds.update", saveCreds);
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    console.log("📨 UPSERT:", type, messages.length);
     if (type !== "notify") return;
     for (const msg of messages) {
+      const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+      const types = Object.keys(msg.message || {});
+      console.log("  → from:", msg.key.remoteJid, "fromMe:", msg.key.fromMe, "body:", body.slice(0,20), "types:", types);
       if (!msg.message || msg.key.fromMe) continue;
       await messageHandler(sock, msg, null).catch(e => console.error("❌ Handler:", e.message));
     }
